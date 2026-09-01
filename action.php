@@ -32,7 +32,7 @@ if ($action === 'lists') {
 if ($action === 'save') {
     $cfg = ps_cfg_read();
     $bools = array('enabled', 'virtual_enable', 'enable_active_low', 'next_active_low',
-                   'repeat', 'wrap', 'resume_last', 'keep_playing');
+                   'repeat', 'wrap', 'resume_last', 'keep_playing', 'takeover');
     $ints  = array('debounce_ms' => array(1, 1000), 'long_press_ms' => array(0, 10000));
     $enums = array(
         'enable_pull'       => array('gpio', 'gpio_pu', 'gpio_pd'),

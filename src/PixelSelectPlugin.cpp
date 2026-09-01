@@ -283,6 +283,7 @@ private:
         mStopMode      = cfg("stop_mode", "now");
         mResumeLast    = toBool(cfg("resume_last"), true);
         mKeepPlaying   = toBool(cfg("keep_playing"), true);
+        mTakeover      = toBool(cfg("takeover"), true);
     }
 
     // ------------------------------------------------------------- design list
@@ -392,7 +393,18 @@ private:
             body += "\"" + jesc(args[i]) + "\"";
         }
         body += "]";
+        std::string resp;
+        return fppdRequest("POST", "/command/" + urlEncode(command), body, resp);
+    }
 
+    // GET fppd's status so we can tell whether the player is still ours.
+    // /fppd/status is served on 32322 by both FPP 5.4 and 9.x.
+    bool fppdStatus(std::string& out) {
+        return fppdRequest("GET", "/fppd/status", "", out);
+    }
+
+    bool fppdRequest(const char* verb, const std::string& path,
+                     const std::string& body, std::string& out) {
         int fd = socket(AF_INET, SOCK_STREAM, 0);
         if (fd < 0) return false;
         struct timeval tv { 2, 0 };
@@ -407,7 +419,7 @@ private:
         if (connect(fd, (struct sockaddr*)&sa, sizeof(sa)) != 0) { close(fd); return false; }
 
         std::ostringstream req;
-        req << "POST /command/" << urlEncode(command) << " HTTP/1.1\r\n"
+        req << verb << " " << path << " HTTP/1.1\r\n"
             << "Host: 127.0.0.1:32322\r\n"
             << "Content-Type: application/json\r\n"
             << "Content-Length: " << body.size() << "\r\n"
@@ -420,12 +432,15 @@ private:
             if (n <= 0) { close(fd); return false; }
             sent += (size_t)n;
         }
-        char buf[512];
-        ssize_t got = recv(fd, buf, sizeof(buf) - 1, 0);
+        out.clear();
+        char buf[2048];
+        ssize_t got;
+        while ((got = recv(fd, buf, sizeof(buf), 0)) > 0) {
+            out.append(buf, (size_t)got);
+            if (out.size() > 262144) break;      // status JSON is far smaller
+        }
         close(fd);
-        if (got <= 0) return false;
-        buf[got] = 0;
-        return strstr(buf, " 200 ") != nullptr;
+        return out.find(" 200 ") != std::string::npos;
     }
 
     void startCurrent() {
@@ -435,7 +450,8 @@ private:
         saveState();
         fppdCommand("Start Playlist", { d.name, mRepeat ? "true" : "false", "false" });
         mLastStart = std::chrono::steady_clock::now();
-        mIdleSince = {};
+        mLostSince = {};
+        mPlaylistAt = {};          // force a fresh read on the next check
         mLastEvent = mLastStart;
     }
 
@@ -443,12 +459,59 @@ private:
         if (mStopMode == "graceful")      fppdCommand("Stop Gracefully", { "false" });
         else if (mStopMode == "afterloop") fppdCommand("Stop Gracefully", { "true" });
         else                               fppdCommand("Stop Now", {});
-        mIdleSince = {};
+        mLostSince = {};
         mLastEvent = std::chrono::steady_clock::now();
     }
 
     bool isPlaying() const {
         return sequence != nullptr && sequence->IsSequenceRunning();
+    }
+
+    // Pull "current_playlist":{... "playlist":"NAME" ...} out of fppd's status
+    // without a JSON library. Cached: the watchdog runs twice a second and this
+    // is a socket round-trip.
+    std::string currentPlaylist(std::chrono::steady_clock::time_point now) {
+        if (mPlaylistAt.time_since_epoch().count() &&
+            now - mPlaylistAt < std::chrono::milliseconds(1000))
+            return mPlaylistName;
+        mPlaylistAt = now;
+        mPlaylistName.clear();
+        mPlaylistKnown = false;
+
+        std::string body;
+        if (!fppdStatus(body)) return mPlaylistName;
+        size_t cp = body.find("\"current_playlist\"");
+        if (cp == std::string::npos) return mPlaylistName;
+        size_t key = body.find("\"playlist\"", cp);
+        if (key == std::string::npos) return mPlaylistName;
+        size_t colon = body.find(':', key + 10);
+        if (colon == std::string::npos) return mPlaylistName;
+        size_t open = body.find('"', colon);
+        if (open == std::string::npos) return mPlaylistName;
+        std::string v;
+        for (size_t i = open + 1; i < body.size(); ++i) {
+            if (body[i] == '\\' && i + 1 < body.size()) { v += body[++i]; continue; }
+            if (body[i] == '"') break;
+            v += body[i];
+        }
+        mPlaylistName = v;
+        mPlaylistKnown = true;
+        return mPlaylistName;
+    }
+
+    // Is the player actually running OUR design, as opposed to a schedule, a
+    // remote, or someone pressing play in the FPP UI?
+    bool designIsPlaying(std::chrono::steady_clock::time_point now) {
+        if (mIndex < 0 || mIndex >= (int)mDesigns.size()) return false;
+        const Design& d = mDesigns[mIndex];
+        if (d.type == "sequence")
+            return sequence != nullptr && sequence->IsSequenceRunning(d.name) != 0;
+        // A playlist walks through items, so the sequence name keeps changing -
+        // compare the playlist name instead. If fppd will not tell us, fall back
+        // to "something is playing" rather than fighting blind.
+        std::string cur = currentPlaylist(now);
+        if (!mPlaylistKnown) return isPlaying();
+        return cur == d.name;
     }
 
     // ------------------------------------------------------------------ inputs
@@ -581,6 +644,7 @@ private:
             "\"buttonConfigured\":%s,\"buttonOk\":%s,\"buttonDown\":%s,"
             "\"index\":%d,\"count\":%d,\"label\":\"%s\",\"name\":\"%s\",\"type\":\"%s\","
             "\"playing\":%s,\"repeat\":%s,\"wrap\":%s,\"pinError\":\"%s\","
+            "\"takeover\":%s,\"heldByOther\":%s,\"reclaims\":%ld,"
             "\"lastEventAgo\":%.1f,\"uptime\":%.1f}",
             mPluginEnabled ? "true" : "false",
             mActive ? "true" : "false",
@@ -599,6 +663,9 @@ private:
             mRepeat ? "true" : "false",
             mWrap ? "true" : "false",
             jesc(mPinError).c_str(),
+            mTakeover ? "true" : "false",
+            mHeldByOther ? "true" : "false",
+            mReclaims,
             ago,
             std::chrono::duration<double>(now - mStart).count());
         fclose(f);
@@ -651,15 +718,29 @@ private:
         if (mActive) stopPlayback();
     }
 
-    // If the toggle is still on but nothing is playing (a sequence ended, someone
-    // hit Stop elsewhere, fppd restarted), put the selected design back on.
-    // The grace period keeps us from fighting the gap between playlist items.
+    // While the switch is on, the plugin owns the player. Two ways it can lose it:
+    // playback simply stopped (a sequence ended, fppd restarted), or something
+    // else took over (the scheduler, a remote, someone pressing play in the FPP
+    // UI). "Keep it playing" covers the first, "take over" covers the second.
+    //
+    // Both are confirmed over two seconds before acting, and nothing happens for
+    // three seconds after our own start, so the gap between playlist repeats
+    // never triggers a reclaim and we cannot thrash against the scheduler.
     void watchdog(std::chrono::steady_clock::time_point now) {
-        if (!mKeepPlaying || !mActive || mIndex < 0) { mIdleSince = {}; return; }
-        if (now - mLastStart < std::chrono::seconds(5)) return;
-        if (isPlaying()) { mIdleSince = {}; return; }
-        if (mIdleSince.time_since_epoch().count() == 0) { mIdleSince = now; return; }
-        if (now - mIdleSince >= std::chrono::seconds(5)) startCurrent();
+        if (!mActive || mIndex < 0) { mLostSince = {}; mHeldByOther = false; return; }
+        if (now - mLastStart < std::chrono::seconds(3)) return;
+
+        if (designIsPlaying(now)) { mLostSince = {}; mHeldByOther = false; return; }
+
+        bool somethingElse = isPlaying();
+        mHeldByOther = somethingElse;
+        if (somethingElse ? !mTakeover : !mKeepPlaying) { mLostSince = {}; return; }
+
+        if (mLostSince.time_since_epoch().count() == 0) { mLostSince = now; return; }
+        if (now - mLostSince >= std::chrono::seconds(2)) {
+            mReclaims++;
+            startCurrent();
+        }
     }
 
     // --- settings ---
@@ -669,6 +750,7 @@ private:
     long mDebounceMs = 30, mLongPressMs = 1200;
     std::string mLongAction = "none", mStopMode = "now";
     bool mRepeat = true, mWrap = true, mResumeLast = true, mKeepPlaying = true;
+    bool mTakeover = true;
 
     // --- runtime ---
     std::vector<Design> mDesigns;
@@ -679,8 +761,12 @@ private:
     std::string mPinError;
     bool mPinsWritten = false;
     DebouncedInput mEnableIn, mNextIn;
-    std::chrono::steady_clock::time_point mPressStart{}, mLastStart{}, mIdleSince{},
-                                          mLastEvent{}, mStart{};
+    std::chrono::steady_clock::time_point mPressStart{}, mLastStart{}, mLostSince{},
+                                          mLastEvent{}, mStart{}, mPlaylistAt{};
+    std::string mPlaylistName;      // what fppd says is playing (playlist designs)
+    bool mPlaylistKnown = false;
+    bool mHeldByOther = false;      // something else has the player right now
+    long mReclaims = 0;             // how many times we have taken it back
 
     std::thread mWorker;
     std::mutex mMx;

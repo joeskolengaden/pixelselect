@@ -51,6 +51,7 @@ function ps_defaults() {
         'stop_mode'         => 'now',
         'resume_last'       => '1',
         'keep_playing'      => '1',
+        'takeover'          => '1',
     );
 }
 

@@ -316,6 +316,11 @@ $ps_cfg = ps_cfg_read();
           <div class="rowline"><label class="sw"><input type="checkbox" id="ps-keep_playing"><span class="sl"></span></label><span class="tiny">Restart if playback ever stops</span></div>
         </div>
         <div class="fld">
+          <label>Override everything else</label>
+          <div class="rowline"><label class="sw"><input type="checkbox" id="ps-takeover"><span class="sl"></span></label><span class="tiny">Take the player back</span></div>
+          <div class="hint">While the switch is on, the plugin wins over a schedule, a remote, or anyone pressing play in the FPP UI.</div>
+        </div>
+        <div class="fld">
           <label>When the switch goes off</label>
           <select id="ps-stop_mode">
             <option value="now">Stop immediately</option>
@@ -405,7 +410,7 @@ $ps_cfg = ps_cfg_read();
   }
 
   /* ---------------------------------------------------------------- settings */
-  var BOOLS = ['enabled','virtual_enable','repeat','wrap','resume_last','keep_playing'];
+  var BOOLS = ['enabled','virtual_enable','repeat','wrap','resume_last','keep_playing','takeover'];
   var VALS  = ['enable_pin','enable_active_low','enable_pull','next_pin','next_active_low',
                'next_pull','debounce_ms','stop_mode','long_press_action','long_press_ms'];
 
@@ -585,6 +590,8 @@ $ps_cfg = ps_cfg_read();
         if (s.name) bits.push(s.name);
         if (s.count) bits.push((s.index + 1) + ' of ' + s.count);
         if (s.active && s.repeat) bits.push('looping');
+        if (s.active && s.heldByOther) bits.push(s.takeover ? 'taking the player back…' : 'something else has the player');
+        if (s.reclaims) bits.push('took over ' + s.reclaims + '\u00d7');
         $('ps-sub').textContent = bits.join(' · ');
 
         var sw = $('ps-lamp-sw');

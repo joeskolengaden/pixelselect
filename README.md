@@ -87,8 +87,29 @@ FPP claims those pins for its own command triggers and the two will fight.
 | Wrap around | on | Off makes the last design the end of the line. |
 | Remember the last design | on | Survives a reboot. A design you have since switched off is skipped. |
 | Keep it playing | on | If playback stops on its own, start the selected design again. |
+| Override everything else | on | While the switch is on, take the player back from a schedule, a remote, or the FPP UI. See below. |
 | When the switch goes off | Stop immediately | Or finish the current item / current loop. |
 | Long press does | nothing | Set it and a short press acts on release, so the two can be told apart. |
+
+## Priority: the switch wins
+
+While the enable switch is on, the plugin owns the player. Closing the switch
+interrupts whatever was running, and if anything else grabs the player
+afterwards — a scheduled playlist starting, a remote, someone pressing play on
+the FPP status page — the plugin takes it straight back.
+
+It checks twice a second and only acts after the player has been somewhere else
+for two seconds, with a three-second grace period after each of its own starts.
+That is deliberately unhurried: the gap between playlist repeats never counts as
+losing the player, and it cannot thrash against FPP's scheduler.
+
+Knowing whether the player is still "ours" is done differently per type: a
+sequence design is checked with `Sequence::IsSequenceRunning(name)`, and a
+playlist design by comparing the running playlist name from `/fppd/status`
+(a playlist walks through items, so the sequence name legitimately changes).
+
+Turn **Override everything else** off if you would rather a schedule win once it
+starts. Opening the switch always hands the player back, whatever this is set to.
 
 ## How it works
 

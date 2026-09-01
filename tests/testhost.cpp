@@ -53,9 +53,28 @@ void PinCapabilities::InitGPIO(const std::string&) {}
 void PinCapabilities::enableOledScreen(int, bool) {}
 
 /* ---------------------------------------------------------- fake fppd */
+// A stand-in for fppd's player: what is on air right now. The Sequence object
+// is never really constructed - the stubs below answer from these globals, so a
+// zeroed allocation is enough to make `sequence` non-null.
 Sequence* sequence = nullptr;
 static std::atomic<bool> gPlaying{false};
+static std::mutex gPlayMx;
+static std::string gCurrentSeq;        // running .fseq, as fppd would report it
+static std::string gCurrentPlaylist;   // running playlist name
+
+static void setPlaying(const std::string& seq, const std::string& pl) {
+    std::lock_guard<std::mutex> lk(gPlayMx);
+    gCurrentSeq = seq;
+    gCurrentPlaylist = pl;
+    gPlaying = !seq.empty() || !pl.empty();
+}
+static std::string curSeq() { std::lock_guard<std::mutex> lk(gPlayMx); return gCurrentSeq; }
+static std::string curPl()  { std::lock_guard<std::mutex> lk(gPlayMx); return gCurrentPlaylist; }
+
 int Sequence::IsSequenceRunning() { return gPlaying.load() ? 1 : 0; }
+int Sequence::IsSequenceRunning(const std::string& filename) {
+    return (gPlaying.load() && curSeq() == filename) ? 1 : 0;
+}
 
 static std::mutex gLogMx;
 static std::vector<std::string> gLog;
@@ -96,9 +115,26 @@ static void fakeFppd() {
                 if (req.size() - hdr >= want) break;
             }
         }
+        std::string verb = req.substr(0, req.find(' '));
         std::string path = req.substr(req.find(' ') + 1);
         path = path.substr(0, path.find(' '));
         std::string body = req.substr(req.find("\r\n\r\n") + 4);
+
+        if (verb == "GET" && path.rfind("/fppd/status", 0) == 0) {
+            std::ostringstream j;
+            j << "{\"current_playlist\":{\"count\":\"1\",\"index\":\"1\",\"playlist\":\""
+              << curPl() << "\",\"type\":\"sequence\"},\"current_sequence\":\"" << curSeq()
+              << "\",\"status_name\":\"" << (gPlaying.load() ? "playing" : "idle") << "\"}";
+            std::string jb = j.str();
+            std::ostringstream r;
+            r << "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
+              << jb.size() << "\r\nConnection: close\r\n\r\n" << jb;
+            std::string rs = r.str();
+            send(c, rs.data(), rs.size(), 0);
+            close(c);
+            continue;
+        }
+
         std::string cmd = path.substr(path.rfind('/') + 1);
         for (size_t i = 0; i + 2 < cmd.size(); ) {   // un-percent-encode
             if (cmd[i] == '%') {
@@ -108,8 +144,16 @@ static void fakeFppd() {
             ++i;
         }
         logCmd(cmd + " " + body);
-        if (cmd.rfind("Start", 0) == 0) gPlaying = true;
-        if (cmd.rfind("Stop", 0) == 0)  gPlaying = false;
+        if (cmd.rfind("Start", 0) == 0) {
+            // body is ["<name>","<repeat>","<ifNotRunning>"] - pull out the name.
+            size_t a = body.find('"'), b = body.find('"', a + 1);
+            std::string name = (a == std::string::npos || b == std::string::npos)
+                             ? std::string() : body.substr(a + 1, b - a - 1);
+            // FPP names the on-the-fly playlist after the fseq it wraps.
+            bool isSeq = name.size() > 5 && name.compare(name.size() - 5, 5, ".fseq") == 0;
+            setPlaying(isSeq ? name : "item-of-" + name, name);
+        }
+        if (cmd.rfind("Stop", 0) == 0) setPlaying("", "");
         const char* resp = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok";
         send(c, resp, strlen(resp), 0);
         close(c);
@@ -178,7 +222,8 @@ static void press()     { PIN_BT.level = false; nap(120); PIN_BT.level = true; }
 
 static void writeConfig(const std::string& root, const char* enabled,
                         const char* wrap, const char* longAction,
-                        const char* enablePin = "P9-15", const char* virtualEnable = "0") {
+                        const char* enablePin = "P9-15", const char* virtualEnable = "0",
+                        const char* takeover = "1") {
     std::ostringstream o;
     o << "enabled = \"" << enabled << "\"\n"
       << "virtual_enable = \"" << virtualEnable << "\"\n"
@@ -195,7 +240,8 @@ static void writeConfig(const std::string& root, const char* enabled,
       << "wrap = \"" << wrap << "\"\n"
       << "stop_mode = \"now\"\n"
       << "resume_last = \"1\"\n"
-      << "keep_playing = \"1\"\n";
+      << "keep_playing = \"1\"\n"
+      << "takeover = \"" << takeover << "\"\n";
     writeFile(root + "/config/plugin.pixelselect", o.str());
 }
 
@@ -219,6 +265,8 @@ int main(int argc, char** argv) {
     writeConfig(root, "1", "1", "none");
     ::remove((root + "/config/pixelselect_state.txt").c_str());
     writeDesigns(root, true);
+    sequence = (Sequence*)calloc(1, sizeof(Sequence));   // stubs answer from globals
+    setPlaying("", "");
     std::thread(fakeFppd).detach();
     nap(200);
 
@@ -298,9 +346,27 @@ int main(int argc, char** argv) {
 
     section("keep-playing watchdog");
     takeLog();
-    gPlaying = false;
-    nap(12000);
+    setPlaying("", "");                              // pretend playback died
+    nap(9000);
     check(logHas(takeLog(), "Start Playlist"), "restarts the design if playback stops on its own");
+
+    section("override whatever else is playing");
+    nap(4000); takeLog();
+    setPlaying("someone-elses.fseq", "Scheduled Show");   // the scheduler barges in
+    nap(9000);
+    l = takeLog();
+    check(countStarts(l) >= 1, "takes the player back when something else grabs it");
+    check(logHas(l, "Snowfall Roof.fseq") || logHas(l, "Candy Cane Spin.fseq")
+       || logHas(l, "Arch Chase.fseq"), "and puts its own design back on");
+
+    section("override turned off");
+    writeConfig(root, "1", "1", "none", "P9-15", "0", "0");   // takeover off
+    nap(1500); takeLog();
+    setPlaying("someone-elses.fseq", "Scheduled Show");
+    nap(9000);
+    check(countStarts(takeLog()) == 0, "leaves the player alone when override is off");
+    writeConfig(root, "1", "1", "none");
+    nap(1500);
 
     section("virtual button from the web UI");
     takeLog();
