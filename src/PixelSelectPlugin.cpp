@@ -461,13 +461,15 @@ private:
         if (mEnableIn.valid && (mNextIn.valid || mNextPin.empty())) mPinError.clear();
     }
 
-    // The switch decides whether we own playback. With no switch configured (or
-    // with the software override on) we behave as if it were held closed, so the
-    // plugin is usable with only a pushbutton, or with no hardware at all.
+    // The switch decides whether we own playback. There must be an explicit
+    // reason to be active: either the configured pin is asserted, or the user
+    // turned the software override on. With no enable pin configured we stay
+    // OUT of the way - a plugin that seized playback the moment it was enabled
+    // would fight the scheduler on a device that has one.
     bool enableAsserted() const {
         if (!mPluginEnabled) return false;
         if (mVirtualEnable) return true;
-        if (mEnablePin.empty()) return true;
+        if (mEnablePin.empty()) return false;
         if (!mEnableIn.valid) return false;
         return mEnableIn.stable;
     }

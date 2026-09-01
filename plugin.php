@@ -239,7 +239,7 @@ $ps_cfg = ps_cfg_read();
         <div class="fld">
           <label>Enable pin — toggle switch</label>
           <select id="ps-enable_pin"></select>
-          <div class="hint">Held in one position = the plugin runs the show.</div>
+          <div class="hint">Held in one position = the plugin runs the show. With no pin set, the plugin stays out of the way unless the software override below is on.</div>
         </div>
         <div class="fld">
           <label>Switch closes to</label>

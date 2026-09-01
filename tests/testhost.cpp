@@ -177,11 +177,12 @@ static void switchOff() { PIN_SW.level = true; }
 static void press()     { PIN_BT.level = false; nap(120); PIN_BT.level = true; }
 
 static void writeConfig(const std::string& root, const char* enabled,
-                        const char* wrap, const char* longAction) {
+                        const char* wrap, const char* longAction,
+                        const char* enablePin = "P9-15", const char* virtualEnable = "0") {
     std::ostringstream o;
     o << "enabled = \"" << enabled << "\"\n"
-      << "virtual_enable = \"0\"\n"
-      << "enable_pin = \"P9-15\"\n"
+      << "virtual_enable = \"" << virtualEnable << "\"\n"
+      << "enable_pin = \"" << enablePin << "\"\n"
       << "enable_active_low = \"1\"\n"
       << "enable_pull = \"gpio_pu\"\n"
       << "next_pin = \"P9-16\"\n"
@@ -321,6 +322,22 @@ int main(int argc, char** argv) {
     check(logHas(takeLog(), "Stop"), "turning the plugin off releases playback");
     press(); nap(400);
     check(!logHas(takeLog(), "Start Playlist"), "the button is inert while the plugin is off");
+
+    section("no enable pin configured");
+    // Regression: an unconfigured plugin must never seize playback. Found on a
+    // real device, where it started a design over the running schedule.
+    writeDesigns(root, true);
+    writeConfig(root, "1", "1", "none", "");        // enabled, but no enable pin
+    nap(900); takeLog();
+    switchOn(); nap(700);                            // the pin is not even watched now
+    check(countStarts(takeLog()) == 0, "an enabled plugin with no enable pin stays out of playback");
+    writeFile(shm + "/pixelselect_cmd", "next\n"); nap(500);
+    check(countStarts(takeLog()) == 0, "and the virtual button cannot start it either");
+    writeConfig(root, "1", "1", "none", "", "1");   // software override on
+    nap(900);
+    check(countStarts(takeLog()) >= 1, "the software override is the way to run without a switch");
+    writeConfig(root, "1", "1", "none");
+    nap(900); takeLog();
 
     section("shutdown");
     delete p;

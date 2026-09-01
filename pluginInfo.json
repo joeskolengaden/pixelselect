@@ -14,7 +14,7 @@
 	"settingsSchema": [
 		{ "key": "enabled", "label": "Plugin enabled", "type": "bool", "default": false, "group": "general", "appliesLive": true, "help": "Master switch. When off the GPIO pins are ignored and the plugin never touches playback." },
 		{ "key": "virtual_enable", "label": "Software override", "type": "bool", "default": false, "group": "general", "appliesLive": true, "help": "Behave as if the enable switch were closed. For testing before the switch is wired." },
-		{ "key": "enable_pin", "label": "Enable pin (toggle switch)", "type": "string", "default": "", "group": "inputs", "appliesLive": true, "help": "FPP pin name, e.g. P9-15 on a Beagle or P1-11 on a Pi. Blank = always enabled." },
+		{ "key": "enable_pin", "label": "Enable pin (toggle switch)", "type": "string", "default": "", "group": "inputs", "appliesLive": true, "help": "FPP pin name, e.g. P9-15 on a Beagle or P1-11 on a Pi. Blank means the plugin never takes over playback unless virtual_enable is set." },
 		{ "key": "enable_active_low", "label": "Enable switch closes to ground", "type": "bool", "default": true, "group": "inputs", "appliesLive": true, "help": "True for a switch wired between the pin and GND (the usual case)." },
 		{ "key": "enable_pull", "label": "Enable pin resistor", "type": "enum", "default": "gpio_pu", "options": ["gpio", "gpio_pu", "gpio_pd"], "group": "inputs", "appliesLive": true, "help": "gpio_pu = internal pull-up, gpio_pd = pull-down, gpio = none/external." },
 		{ "key": "next_pin", "label": "Next pin (pushbutton)", "type": "string", "default": "", "group": "inputs", "appliesLive": true, "help": "FPP pin name for the momentary pushbutton that advances the design." },

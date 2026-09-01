@@ -72,7 +72,7 @@ FPP claims those pins for its own command triggers and the two will fight.
 
 | Setting | Default | Notes |
 |---|---|---|
-| Enable pin | — | The toggle switch. Leave blank to run without one. |
+| Enable pin | — | The toggle switch. With none set the plugin never takes over playback, so it cannot fight a schedule; use the software override to run without a switch. |
 | Next pin | — | The momentary pushbutton. |
 | Closes to | Ground | Ground for a switch wired to GND, 3.3 V for the other polarity. |
 | Resistor | Internal pull-up | Match it to the wiring; use *None/External* if you fitted your own. |
