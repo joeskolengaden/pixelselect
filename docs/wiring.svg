@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 366" width="760" height="366" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+  <rect width="760" height="366" fill="#ffffff"/>
+
+  <rect x="34" y="56" width="150" height="232" rx="12" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="109" y="44" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">BeagleBone / Pi</text>
+  <text x="109" y="306" text-anchor="middle" font-size="11.5" fill="#64748b">GPIO header</text>
+
+  <g fill="#0f172a">
+    <rect x="172" y="93"  width="24" height="13" rx="3" fill="#334155"/>
+    <rect x="172" y="190" width="24" height="13" rx="3" fill="#334155"/>
+    <rect x="172" y="256" width="24" height="13" rx="3" fill="#334155"/>
+    <text x="58" y="104" font-size="12.5" font-weight="600">enable pin</text>
+    <text x="58" y="201" font-size="12.5" font-weight="600">next pin</text>
+    <text x="58" y="267" font-size="12.5" font-weight="600">GND</text>
+  </g>
+
+  <g stroke="#334155" stroke-width="2" fill="none" stroke-linecap="round">
+    <path d="M196 99 H332"/>
+    <path d="M196 196 H332"/>
+    <path d="M196 263 H612"/>
+    <path d="M474 99 H612"/>
+    <path d="M474 196 H612"/>
+  </g>
+
+  <!-- toggle switch: hinged lever, drawn open -->
+  <g stroke="#334155" stroke-width="2" fill="#ffffff">
+    <circle cx="340" cy="99" r="5"/>
+    <circle cx="466" cy="99" r="5"/>
+    <path d="M344 95 L462 74" stroke-linecap="round"/>
+  </g>
+  <text x="403" y="62" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2563eb">toggle switch</text>
+  <text x="403" y="126" text-anchor="middle" font-size="11.5" fill="#64748b">held closed = the plugin runs the show</text>
+
+  <!-- pushbutton: normally open -->
+  <text x="403" y="150" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2563eb">pushbutton</text>
+  <rect x="378" y="158" width="50" height="12" rx="4" fill="#2563eb"/>
+  <g stroke="#334155" stroke-width="2" fill="none" stroke-linecap="round">
+    <path d="M403 170 V180"/>
+    <path d="M326 180 H480"/>
+    <path d="M340 196 V184"/>
+    <path d="M466 196 V184"/>
+  </g>
+  <g stroke="#334155" stroke-width="2" fill="#ffffff">
+    <circle cx="340" cy="196" r="5"/>
+    <circle cx="466" cy="196" r="5"/>
+  </g>
+  <text x="403" y="224" text-anchor="middle" font-size="11.5" fill="#64748b">each press = the next design</text>
+
+  <g stroke="#334155" stroke-width="2" fill="none" stroke-linecap="round">
+    <path d="M612 99 V263"/>
+    <path d="M612 196 V263"/>
+    <path d="M612 263 V279"/>
+    <path d="M594 279 H630 M600 287 H624 M606 295 H618"/>
+  </g>
+  <text x="644" y="283" font-size="11.5" fill="#64748b">ground</text>
+
+  <rect x="34" y="322" width="692" height="1" fill="#e2e8f0"/>
+  <text x="34" y="342" font-size="11.5" fill="#475569">The defaults match this exactly: &#8220;closes to Ground (active low)&#8221; + &#8220;Internal pull-up&#8221;.</text>
+  <text x="34" y="357" font-size="11.5" fill="#475569">The pull-up holds each pin high while its switch is open.</text>
+</svg>
