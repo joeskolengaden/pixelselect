@@ -5,6 +5,7 @@
 #include "Plugin.h"
 #include "Sequence.h"
 #include "util/GPIOUtils.h"
+#include "Scheduler.h"
 
 #include <atomic>
 #include <cstdio>
@@ -72,6 +73,18 @@ static std::string curSeq() { std::lock_guard<std::mutex> lk(gPlayMx); return gC
 static std::string curPl()  { std::lock_guard<std::mutex> lk(gPlayMx); return gCurrentPlaylist; }
 
 int Sequence::IsSequenceRunning() { return gPlaying.load() ? 1 : 0; }
+
+// Stand-in for FPP's scheduler. gScheduledNow is what the schedule says should
+// be running at this moment; asking it to look again starts that, which is what
+// the real CheckIfShouldBePlayingNow(1, -1) ends up doing.
+Scheduler* scheduler = nullptr;
+static std::string gScheduledNow;         // "" = nothing scheduled right now
+static std::atomic<int> gSchedulerAsked{0};
+void Scheduler::CheckIfShouldBePlayingNow(int ignoreRepeat, int forceStopped) {
+    gSchedulerAsked++;
+    if (!gScheduledNow.empty() && !gPlaying.load())
+        setPlaying("scheduled-item.fseq", gScheduledNow);
+}
 int Sequence::IsSequenceRunning(const std::string& filename) {
     return (gPlaying.load() && curSeq() == filename) ? 1 : 0;
 }
@@ -223,7 +236,7 @@ static void press()     { PIN_BT.level = false; nap(120); PIN_BT.level = true; }
 static void writeConfig(const std::string& root, const char* enabled,
                         const char* wrap, const char* longAction,
                         const char* enablePin = "P9-15", const char* virtualEnable = "0",
-                        const char* takeover = "1") {
+                        const char* takeover = "1", const char* handBack = "1") {
     std::ostringstream o;
     o << "enabled = \"" << enabled << "\"\n"
       << "virtual_enable = \"" << virtualEnable << "\"\n"
@@ -241,7 +254,8 @@ static void writeConfig(const std::string& root, const char* enabled,
       << "stop_mode = \"now\"\n"
       << "resume_last = \"1\"\n"
       << "keep_playing = \"1\"\n"
-      << "takeover = \"" << takeover << "\"\n";
+      << "takeover = \"" << takeover << "\"\n"
+      << "hand_back = \"" << handBack << "\"\n";
     writeFile(root + "/config/plugin.pixelselect", o.str());
 }
 
@@ -266,6 +280,7 @@ int main(int argc, char** argv) {
     ::remove((root + "/config/pixelselect_state.txt").c_str());
     writeDesigns(root, true);
     sequence = (Sequence*)calloc(1, sizeof(Sequence));   // stubs answer from globals
+    scheduler = (Scheduler*)calloc(1, sizeof(Scheduler));
     setPlaying("", "");
     std::thread(fakeFppd).detach();
     nap(200);
@@ -367,6 +382,38 @@ int main(int argc, char** argv) {
     check(countStarts(takeLog()) == 0, "leaves the player alone when override is off");
     writeConfig(root, "1", "1", "none");
     nap(1500);
+
+    section("giving the schedule back");
+    // FPP will not resume a mid-window scheduled playlist once something else
+    // has owned the player, so the plugin has to ask the scheduler to look again.
+    gScheduledNow = "Scheduled Show";
+    writeConfig(root, "1", "1", "none");
+    nap(1500);
+    switchOn(); nap(4000);
+    check(curPl() != "Scheduled Show", "the plugin is holding the player");
+    gSchedulerAsked = 0;
+    switchOff(); nap(5000);
+    check(gSchedulerAsked > 0, "asks the scheduler to look again once the player is idle");
+    check(curPl() == "Scheduled Show", "the scheduled playlist is running again");
+
+    section("nothing scheduled right now");
+    gScheduledNow = "";
+    switchOn(); nap(4000);
+    gSchedulerAsked = 0;
+    switchOff(); nap(5000);
+    check(gSchedulerAsked > 0, "still asks the scheduler");
+    check(!gPlaying.load(), "and correctly stays idle when nothing is scheduled");
+
+    section("hand-back turned off");
+    writeConfig(root, "1", "1", "none", "P9-15", "0", "1", "0");   // hand_back off
+    nap(1500);
+    switchOn(); nap(4000);
+    gSchedulerAsked = 0;
+    switchOff(); nap(5000);
+    check(gSchedulerAsked == 0, "leaves the scheduler alone when hand-back is off");
+    writeConfig(root, "1", "1", "none");
+    nap(1500);
+    switchOn(); nap(4000); takeLog();       // restore the state later sections expect
 
     section("virtual button from the web UI");
     takeLog();

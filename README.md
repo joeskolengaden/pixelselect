@@ -88,6 +88,7 @@ FPP claims those pins for its own command triggers and the two will fight.
 | Remember the last design | on | Survives a reboot. A design you have since switched off is skipped. |
 | Keep it playing | on | If playback stops on its own, start the selected design again. |
 | Override everything else | on | While the switch is on, take the player back from a schedule, a remote, or the FPP UI. See below. |
+| Back to the schedule on release | on | When the switch opens, nudge FPP's scheduler so a schedule still inside its window resumes. |
 | When the switch goes off | Stop immediately | Or finish the current item / current loop. |
 | Long press does | nothing | Set it and a short press acts on release, so the two can be told apart. |
 
@@ -110,6 +111,20 @@ playlist design by comparing the running playlist name from `/fppd/status`
 
 Turn **Override everything else** off if you would rather a schedule win once it
 starts. Opening the switch always hands the player back, whatever this is set to.
+
+### Giving the schedule back
+
+Stopping is not enough on its own. Once any other playlist has owned the player,
+FPP marks the day's scheduled occurrence as already run and will not restart it
+mid-window — not when the player goes idle, and not on a schedule reload either.
+Left alone, the device would simply sit dark until the schedule's next day.
+
+So when the switch opens, the plugin waits for the player to go idle (a graceful
+stop still gets to finish its item) and then asks the scheduler to look again,
+with the "ignore repeat" flag so an already-run in-window item is re-armed. FPP
+starts it through its own scheduled path, so the playlist keeps its scheduled end
+time and stop type — starting it directly would lose both. If nothing is
+scheduled for right now, the device correctly stays idle.
 
 ## How it works
 

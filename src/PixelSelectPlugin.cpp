@@ -64,6 +64,7 @@
 #include "Plugin.h"
 #include "Sequence.h"
 #include "util/GPIOUtils.h"
+#include "Scheduler.h"
 
 namespace {
 
@@ -284,6 +285,7 @@ private:
         mResumeLast    = toBool(cfg("resume_last"), true);
         mKeepPlaying   = toBool(cfg("keep_playing"), true);
         mTakeover      = toBool(cfg("takeover"), true);
+        mHandBack      = toBool(cfg("hand_back"), true);
     }
 
     // ------------------------------------------------------------- design list
@@ -451,6 +453,7 @@ private:
         fppdCommand("Start Playlist", { d.name, mRepeat ? "true" : "false", "false" });
         mLastStart = std::chrono::steady_clock::now();
         mLostSince = {};
+        mHandBackArmed = false;
         mPlaylistAt = {};          // force a fresh read on the next check
         mLastEvent = mLastStart;
     }
@@ -460,6 +463,10 @@ private:
         else if (mStopMode == "afterloop") fppdCommand("Stop Gracefully", { "true" });
         else                               fppdCommand("Stop Now", {});
         mLostSince = {};
+        mHandBackArmed = mHandBack;
+        mHandBackSince = std::chrono::steady_clock::now();
+        mHandBackTries = 0;
+        mHandBackAt = {};
         mLastEvent = std::chrono::steady_clock::now();
     }
 
@@ -645,6 +652,7 @@ private:
             "\"index\":%d,\"count\":%d,\"label\":\"%s\",\"name\":\"%s\",\"type\":\"%s\","
             "\"playing\":%s,\"repeat\":%s,\"wrap\":%s,\"pinError\":\"%s\","
             "\"takeover\":%s,\"heldByOther\":%s,\"reclaims\":%ld,"
+            "\"handBack\":%s,\"handBackPending\":%s,\"handedBack\":%ld,"
             "\"lastEventAgo\":%.1f,\"uptime\":%.1f}",
             mPluginEnabled ? "true" : "false",
             mActive ? "true" : "false",
@@ -666,6 +674,9 @@ private:
             mTakeover ? "true" : "false",
             mHeldByOther ? "true" : "false",
             mReclaims,
+            mHandBack ? "true" : "false",
+            mHandBackArmed ? "true" : "false",
+            mHandedBack,
             ago,
             std::chrono::duration<double>(now - mStart).count());
         fclose(f);
@@ -711,6 +722,7 @@ private:
 
             if (tick % 100 == 0) {
                 watchdog(now);
+                handBackToScheduler(now);
                 writeStatus();
             }
             if (++tick >= 1000) tick = 0;
@@ -726,6 +738,39 @@ private:
     // Both are confirmed over two seconds before acting, and nothing happens for
     // three seconds after our own start, so the gap between playlist repeats
     // never triggers a reclaim and we cannot thrash against the scheduler.
+    // Handing the player back to FPP's scheduler.
+    //
+    // FPP will not resume a mid-window scheduled playlist on its own once
+    // something else has owned the player: the day's occurrence is marked as
+    // "ran" and stays that way (a schedule reload does not clear it either).
+    // So when the switch opens we ask the scheduler to look again, with
+    // ignoreRepeat set so an already-ran in-window item is re-armed. FPP then
+    // starts it through its normal scheduled path, which means the schedule
+    // keeps its own end time and stop type - starting the playlist ourselves
+    // would lose both.
+    //
+    // We wait for the player to actually go idle first, so a graceful stop
+    // still gets to finish its item.
+    void handBackToScheduler(std::chrono::steady_clock::time_point now) {
+        if (!mHandBackArmed || mActive) return;
+        if (now - mHandBackSince > std::chrono::minutes(10)) { mHandBackArmed = false; return; }
+        if (isPlaying()) {
+            // Either our stop is still winding down, or the schedule (or
+            // something else) is already playing - either way, nothing to do.
+            if (mHandBackTries > 0) mHandBackArmed = false;
+            return;
+        }
+        if (mHandBackAt.time_since_epoch().count() &&
+            now - mHandBackAt < std::chrono::seconds(2)) return;   // space out retries
+
+        if (scheduler != nullptr) {
+            scheduler->CheckIfShouldBePlayingNow(1, -1);
+            mHandedBack++;
+        }
+        mHandBackAt = now;
+        if (++mHandBackTries >= 3) mHandBackArmed = false;
+    }
+
     void watchdog(std::chrono::steady_clock::time_point now) {
         if (!mActive || mIndex < 0) { mLostSince = {}; mHeldByOther = false; return; }
         if (now - mLastStart < std::chrono::seconds(3)) return;
@@ -750,7 +795,7 @@ private:
     long mDebounceMs = 30, mLongPressMs = 1200;
     std::string mLongAction = "none", mStopMode = "now";
     bool mRepeat = true, mWrap = true, mResumeLast = true, mKeepPlaying = true;
-    bool mTakeover = true;
+    bool mTakeover = true, mHandBack = true;
 
     // --- runtime ---
     std::vector<Design> mDesigns;
@@ -767,6 +812,10 @@ private:
     bool mPlaylistKnown = false;
     bool mHeldByOther = false;      // something else has the player right now
     long mReclaims = 0;             // how many times we have taken it back
+    bool mHandBackArmed = false;    // owe the scheduler a nudge after letting go
+    int  mHandBackTries = 0;
+    long mHandedBack = 0;
+    std::chrono::steady_clock::time_point mHandBackSince{}, mHandBackAt{};
 
     std::thread mWorker;
     std::mutex mMx;

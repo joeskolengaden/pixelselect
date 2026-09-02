@@ -316,6 +316,11 @@ $ps_cfg = ps_cfg_read();
           <div class="rowline"><label class="sw"><input type="checkbox" id="ps-keep_playing"><span class="sl"></span></label><span class="tiny">Restart if playback ever stops</span></div>
         </div>
         <div class="fld">
+          <label>Back to the schedule on release</label>
+          <div class="rowline"><label class="sw"><input type="checkbox" id="ps-hand_back"><span class="sl"></span></label><span class="tiny">Hand the player back</span></div>
+          <div class="hint">When the switch opens, nudge FPP's scheduler so a schedule that is still inside its window picks up again.</div>
+        </div>
+        <div class="fld">
           <label>Override everything else</label>
           <div class="rowline"><label class="sw"><input type="checkbox" id="ps-takeover"><span class="sl"></span></label><span class="tiny">Take the player back</span></div>
           <div class="hint">While the switch is on, the plugin wins over a schedule, a remote, or anyone pressing play in the FPP UI.</div>
@@ -410,7 +415,7 @@ $ps_cfg = ps_cfg_read();
   }
 
   /* ---------------------------------------------------------------- settings */
-  var BOOLS = ['enabled','virtual_enable','repeat','wrap','resume_last','keep_playing','takeover'];
+  var BOOLS = ['enabled','virtual_enable','repeat','wrap','resume_last','keep_playing','takeover','hand_back'];
   var VALS  = ['enable_pin','enable_active_low','enable_pull','next_pin','next_active_low',
                'next_pull','debounce_ms','stop_mode','long_press_action','long_press_ms'];
 
@@ -592,6 +597,7 @@ $ps_cfg = ps_cfg_read();
         if (s.active && s.repeat) bits.push('looping');
         if (s.active && s.heldByOther) bits.push(s.takeover ? 'taking the player back…' : 'something else has the player');
         if (s.reclaims) bits.push('took over ' + s.reclaims + '\u00d7');
+        if (!s.active && s.handBackPending) bits.push('handing back to the schedule…');
         $('ps-sub').textContent = bits.join(' · ');
 
         var sw = $('ps-lamp-sw');

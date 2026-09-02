@@ -52,6 +52,7 @@ function ps_defaults() {
         'resume_last'       => '1',
         'keep_playing'      => '1',
         'takeover'          => '1',
+        'hand_back'         => '1',
     );
 }
 
