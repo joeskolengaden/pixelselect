@@ -1,4 +1,4 @@
-# PixelSelect — pick the show with two GPIO pins
+# PixelSelect — pick the show with GPIO switches
 
 An FPP plugin for a display that people walk up to.
 
@@ -11,8 +11,8 @@ Add as many toggle switches as you have free pins. Each one owns its own set of
 designs and remembers which one it was showing, so a panel can offer "Christmas",
 "Halloween" and "Quiet" as three separate switches with one shared button.
 
-Both pins are chosen in the plugin's own UI. There is no FPP GPIO Inputs entry to
-create and no FPP Command to wire up. The settings page shows both inputs live and
+Every pin is chosen in the plugin's own UI. There is no FPP GPIO Inputs entry to
+create and no FPP Command to wire up. The settings page shows each input live and
 doubles as a virtual pushbutton, so the whole thing can be set up and tested
 before a single wire is soldered.
 
@@ -49,9 +49,9 @@ Verified end to end on a BeagleBone Green running FPP 5.4.1.
 |---|---|
 | A switch closes | That switch's selected design starts and loops. Whatever was playing is interrupted. |
 | Button press | Jump to the next enabled design **in that switch's set** and start it. |
+| Button press on the last one | Wrap to the first (or hold, if wrap is off). |
 | A second switch closes | Hand over to its set. The most recently closed switch wins. |
 | That switch opens again | Fall back to whichever switch is still closed. |
-| Button press on the last one | Wrap to the first (or hold, if wrap is off). |
 | Something else grabs the player | The plugin takes it back within a few seconds. |
 | Playback stops on its own | The selected design is started again. |
 | Every switch open | Playback stops, and FPP's schedule is handed back. |
@@ -142,13 +142,14 @@ and ground, with FPP's internal pull-up holding the pin high while it is open.
 
 ![Wiring: two toggle switches and a shared pushbutton, each between a GPIO pin and ground](docs/wiring.png)
 
-If you wire to 3.3 V instead, set *"closes to"* to **3.3 V (active high)** and the
-resistor to **Internal pull-down** for that pin. If you fitted your own resistors,
-choose **None / external**.
+If you wire to 3.3 V instead, change the line under the switch list to
+*"Everything is wired **to 3.3 V** with **the internal pull-down**"*. It applies to
+every switch and the button at once, because a panel is invariably wired one way
+throughout. If you fitted your own resistors, choose *no internal resistor*.
 
 **Choosing pins.** The pickers only offer pins the board actually has — the list
 comes from FPP itself, so BeagleBone names look like `P8-11` / `P9-15` and
-Raspberry Pi like `P1-11`. Two things to avoid:
+Raspberry Pi like `P1-11`. Three things to avoid:
 
 - **The pushbutton pin, or another switch's pin.** The plugin refuses to save a
   duplicate, but it is worth knowing before you solder.
@@ -165,7 +166,7 @@ Raspberry Pi like `P1-11`. Two things to avoid:
 | Setting | Default | Notes |
 |---|---|---|
 | Name | — | Shown on the design tabs and on the status header. |
-| Pin | — | A switch with no pin never becomes active, so an unconfigured plugin cannot fight a schedule. |
+| Pin | — | Required to add a switch — one without a pin can never fire, and is badged **no pin** if a config ever contains one. The very first switch may sit pinless, which is the state a fresh install starts in: it never becomes active, so an unconfigured plugin cannot fight a schedule. |
 | Everything is wired… | to ground, internal pull-up | Applies to every switch and the button at once. Set it to 3.3 V + pull-down for the other polarity, or "no internal resistor" if you fitted your own. |
 | Test without switches | off | Behave as if a switch were closed, and choose which one. For testing before anything is wired. |
 
@@ -190,7 +191,7 @@ everyone. The summary line on the header says what they currently add up to.
 
 ## Priority: the switch wins
 
-While the enable switch is on, the plugin owns the player. Closing the switch
+While any switch is closed, the plugin owns the player. Closing the switch
 interrupts whatever was running, and if anything else grabs the player afterwards
 — a scheduled playlist starting, a remote, someone pressing play on the FPP status
 page — the plugin takes it straight back.
@@ -243,17 +244,27 @@ You do not need the switches to set this up.
 
 ## How it works
 
-`libpixelselect.so` is a compiled FPP plugin. A worker thread samples both pins
-every 5 ms through FPP's own `PinCapabilities`, which is why pin names here mean
+`libpixelselect.so` is a compiled FPP plugin. A worker thread samples every switch
+and the button every 5 ms through FPP's own `PinCapabilities`, which is why pin names here mean
 the same thing as on FPP's GPIO Inputs page, on both BeagleBone and Pi.
 
 Playback is driven by POSTing `Start Playlist` / `Stop Now` to fppd's command
 endpoint on `127.0.0.1:32322` rather than by linking against `Player` or
 `CommandManager`. Those headers pull in libhttpserver on 5.4 and drogon on 9.x,
 neither of which is reliably present on a device that is only compiling a plugin;
-the HTTP command API has been stable across every version in range. The one direct
-call into FPP is `Scheduler::CheckIfShouldBePlayingNow`, whose header is
-dependency-free and whose signature is identical on 5.4 and 9.x.
+the HTTP command API has been stable across every version in range.
+
+That keeps the plugin's whole dependency on FPP down to seven functions and two
+globals, every one of them from a header with no third-party includes and with an
+identical signature on 5.4 and 9.x:
+
+```
+PinCapabilities::getPinByName / getPinNames      pins, by FPP's own names
+Sequence::IsSequenceRunning() / (name)           is our design still on air
+Scheduler::CheckIfShouldBePlayingNow(int, int)   hand the schedule back
+FPPPlugin::FPPPlugin / reloadSettings            the plugin base itself
+sequence, scheduler                              the two globals those need
+```
 
 Files the plugin owns:
 
@@ -282,9 +293,9 @@ runs on a laptop:
 FPPSRC=/path/to/fpp-checkout ./tests/run.sh
 ```
 
-It compiles the real plugin, `dlopen`s it into a host that stubs the five FPP
-symbols the plugin uses, fakes the two GPIO pins, models what is on air, and
-answers fppd's command endpoint so every `Start Playlist` can be asserted on.
+It compiles the real plugin, `dlopen`s it into a host that stubs those few FPP
+symbols, fakes the GPIO pins, models what is on air and what the schedule wants,
+and answers fppd's command endpoint so every `Start Playlist` can be asserted on.
 47 checks, including a bouncing press advancing exactly one design, an enabled
 plugin with no pin staying out of playback, reclaiming the player from something
 else, handing the schedule back, and a second switch taking over without ever
@@ -298,6 +309,7 @@ walking into the first switch's designs. On a device, `FPPSRC=/opt/fpp` works to
 | Lamps never change | Wrong pin, wrong polarity, or the pin is also claimed on FPP's GPIO Inputs page or by your cape. |
 | The button walks the wrong designs | It always walks the set of the switch that is currently closed. Check the tab and the switch lamps. |
 | One press advances two designs | Raise **Debounce**. |
+| A switch is badged **no pin** | It has no pin assigned, so it can never fire. Pick one from its dropdown. |
 | An entry is badged **missing** | Its sequence or playlist is no longer on the device — re-upload it or remove the entry. |
 | Nothing plays, but the lamps look right | The design list is empty, or every entry is switched off. |
 | The schedule does not resume after release | Check **Back to the schedule on release** is on, and that a schedule is actually in its time window right now. |
