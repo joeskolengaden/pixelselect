@@ -34,11 +34,13 @@ struct FakePin : public PinCapabilities {
     bool supportPWM() const override { return false; }
 };
 static FakePin PIN_SW("P9-15");
+static FakePin PIN_SW2("P9-23");
 static FakePin PIN_BT("P9-16");
 static FakePin PIN_NONE("");
 
 const PinCapabilities& PinCapabilities::getPinByName(const std::string& n) {
     if (n == "P9-15") return PIN_SW;
+    if (n == "P9-23") return PIN_SW2;
     if (n == "P9-16") return PIN_BT;
     static struct NullPin : public FakePin {
         NullPin() : FakePin("") {}
@@ -231,6 +233,29 @@ static bool jsonHas(const std::string& j, const std::string& kv) { return j.find
 // The switch and button are wired active low, so "closed" is a low level.
 static void switchOn()  { PIN_SW.level = false; }
 static void switchOff() { PIN_SW.level = true; }
+static void switch2On()  { PIN_SW2.level = false; }
+static void switch2Off() { PIN_SW2.level = true; }
+
+// Two switches, each owning its own designs. Written only by the multi-switch
+// section; every other section runs with no sets file at all, which is what
+// proves the single-switch install still works untouched.
+static void writeSets(const std::string& root) {
+    writeFile(root + "/config/pixelselect_sets.tsv",
+              "# name\tpin\tactive_low\tpull\n"
+              "Christmas\tP9-15\t1\tgpio_pu\n"
+              "Halloween\tP9-23\t1\tgpio_pu\n");
+}
+static void clearSets(const std::string& root) {
+    ::remove((root + "/config/pixelselect_sets.tsv").c_str());
+}
+static void writeTwoSetDesigns(const std::string& root) {
+    writeFile(root + "/config/pixelselect_designs.tsv",
+              "# type\tname\tlabel\tenabled\tset\n"
+              "sequence\tSnowfall Roof.fseq\tSnowfall\t1\t0\n"
+              "sequence\tCandy Cane Spin.fseq\tCandy Cane\t1\t0\n"
+              "sequence\tArch Chase.fseq\tArch Chase\t1\t1\n"
+              "sequence\tIcicle Drip.fseq\tIcicle\t1\t1\n");
+}
 static void press()     { PIN_BT.level = false; nap(120); PIN_BT.level = true; }
 
 static void writeConfig(const std::string& root, const char* enabled,
@@ -278,6 +303,7 @@ int main(int argc, char** argv) {
 
     writeConfig(root, "1", "1", "none");
     ::remove((root + "/config/pixelselect_state.txt").c_str());
+    clearSets(root);
     writeDesigns(root, true);
     sequence = (Sequence*)calloc(1, sizeof(Sequence));   // stubs answer from globals
     scheduler = (Scheduler*)calloc(1, sizeof(Scheduler));
@@ -296,7 +322,7 @@ int main(int argc, char** argv) {
     nap(900);
     std::string st = readStatus(shm);
     check(jsonHas(st, "\"live\":true"), "publishes a live status snapshot");
-    check(jsonHas(st, "\"count\":4"), "reads the 4-entry design list");
+    check(jsonHas(st, "\"totalDesigns\":4"), "reads the 4-entry design list");
     check(jsonHas(st, "\"switchOk\":true") && jsonHas(st, "\"buttonOk\":true"), "resolves both pins");
     check(readFile(shm + "/pixelselect_pins.json").find("P9-15") != std::string::npos,
           "publishes the board's pin list for the UI");
@@ -417,16 +443,16 @@ int main(int argc, char** argv) {
 
     section("virtual button from the web UI");
     takeLog();
-    writeFile(shm + "/pixelselect_cmd", "next\n"); nap(500);
+    writeFile(shm + "/pixelselect_cmd", "next\n"); nap(900);
     check(logHas(takeLog(), "Start Playlist"), "the UI's virtual Next press works");
-    writeFile(shm + "/pixelselect_cmd", "stop\n"); nap(400);
+    writeFile(shm + "/pixelselect_cmd", "stop\n"); nap(900);
     check(logHas(takeLog(), "Stop"), "the UI's Stop works");
 
     section("live edit of the design list");
     writeFile(root + "/config/pixelselect_designs.tsv",
               "# edited\nsequence\tIcicle Drip.fseq\tIcicle\t1\n");
     nap(900);
-    check(jsonHas(readStatus(shm), "\"count\":1"), "picks up a design list edited underneath it");
+    check(jsonHas(readStatus(shm), "\"totalDesigns\":1"), "picks up a design list edited underneath it");
 
     section("master switch off");
     takeLog();
@@ -451,6 +477,49 @@ int main(int argc, char** argv) {
     check(countStarts(takeLog()) >= 1, "the software override is the way to run without a switch");
     writeConfig(root, "1", "1", "none");
     nap(900); takeLog();
+
+    section("several switches, one set of designs each");
+    switchOff(); switch2Off(); nap(1500);
+    writeSets(root);
+    writeTwoSetDesigns(root);
+    nap(1500); takeLog();
+
+    switchOn(); nap(4000);
+    l = takeLog();
+    check(logHas(l, "Snowfall Roof.fseq"), "the first switch starts its own first design");
+
+    press(); nap(1200);
+    l = takeLog();
+    check(logHas(l, "Candy Cane Spin.fseq"), "the button walks only that switch's designs");
+    press(); nap(1200);
+    check(logHas(takeLog(), "Snowfall Roof.fseq"), "and wraps inside the set, never into the other one");
+
+    switch2On(); nap(4000);                       // both closed - newest wins
+    l = takeLog();
+    check(logHas(l, "Arch Chase.fseq"), "closing a second switch hands over to its set");
+    press(); nap(1200);
+    check(logHas(takeLog(), "Icicle Drip.fseq"), "the button now walks the second set");
+
+    switch2Off(); nap(4000);                      // fall back to the one still closed
+    l = takeLog();
+    check(logHas(l, "Icicle Drip.fseq") == false, "releasing the newer switch leaves its set");
+    check(logHas(l, "Snowfall Roof.fseq") || logHas(l, "Candy Cane Spin.fseq"),
+          "and falls back to the switch that is still closed");
+
+    switch2On(); nap(4000); takeLog();            // each set remembers its own design
+    press(); nap(1500);
+    bool onIcicle = logHas(takeLog(), "Icicle Drip.fseq");
+    switch2Off(); nap(4000); takeLog();
+    switch2On(); nap(4000);
+    check(logHas(takeLog(), onIcicle ? "Icicle Drip.fseq" : "Arch Chase.fseq"),
+          "each switch remembers its own last design");
+
+    switchOff(); switch2Off(); nap(4000);
+    check(logHas(takeLog(), "Stop"), "with every switch open the plugin lets go");
+
+    clearSets(root);
+    writeDesigns(root, true);
+    nap(1500); takeLog();
 
     section("shutdown");
     delete p;

@@ -1,60 +1,66 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 366" width="760" height="366" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
-  <rect width="760" height="366" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 396" width="760" height="396" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+  <rect width="760" height="396" fill="#ffffff"/>
 
-  <rect x="34" y="56" width="150" height="232" rx="12" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.5"/>
-  <text x="109" y="44" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">BeagleBone / Pi</text>
-  <text x="109" y="306" text-anchor="middle" font-size="11.5" fill="#64748b">GPIO header</text>
+  <rect x="34" y="52" width="150" height="266" rx="12" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="109" y="40" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">BeagleBone / Pi</text>
+  <text x="109" y="336" text-anchor="middle" font-size="11.5" fill="#64748b">GPIO header</text>
 
   <g fill="#0f172a">
-    <rect x="172" y="93"  width="24" height="13" rx="3" fill="#334155"/>
-    <rect x="172" y="190" width="24" height="13" rx="3" fill="#334155"/>
-    <rect x="172" y="256" width="24" height="13" rx="3" fill="#334155"/>
-    <text x="58" y="104" font-size="12.5" font-weight="600">enable pin</text>
-    <text x="58" y="201" font-size="12.5" font-weight="600">next pin</text>
-    <text x="58" y="267" font-size="12.5" font-weight="600">GND</text>
+    <rect x="172" y="83"  width="24" height="13" rx="3" fill="#334155"/>
+    <rect x="172" y="153" width="24" height="13" rx="3" fill="#334155"/>
+    <rect x="172" y="240" width="24" height="13" rx="3" fill="#334155"/>
+    <rect x="172" y="296" width="24" height="13" rx="3" fill="#334155"/>
+    <text x="52" y="94"  font-size="12" font-weight="600">“Christmas”</text>
+    <text x="52" y="164" font-size="12" font-weight="600">“Halloween”</text>
+    <text x="52" y="251" font-size="12" font-weight="600">next pin</text>
+    <text x="52" y="307" font-size="12" font-weight="600">GND</text>
   </g>
 
   <g stroke="#334155" stroke-width="2" fill="none" stroke-linecap="round">
-    <path d="M196 99 H332"/>
-    <path d="M196 196 H332"/>
-    <path d="M196 263 H612"/>
-    <path d="M474 99 H612"/>
-    <path d="M474 196 H612"/>
+    <path d="M196 89 H332"/>
+    <path d="M196 159 H332"/>
+    <path d="M196 246 H332"/>
+    <path d="M196 302 H612"/>
+    <path d="M474 89 H612"/>
+    <path d="M474 159 H612"/>
+    <path d="M474 246 H612"/>
   </g>
 
-  <!-- toggle switch: hinged lever, drawn open -->
+  <!-- two toggle switches, drawn open -->
   <g stroke="#334155" stroke-width="2" fill="#ffffff">
-    <circle cx="340" cy="99" r="5"/>
-    <circle cx="466" cy="99" r="5"/>
-    <path d="M344 95 L462 74" stroke-linecap="round"/>
+    <circle cx="340" cy="89" r="5"/><circle cx="466" cy="89" r="5"/>
+    <path d="M344 85 L462 66" stroke-linecap="round"/>
+    <circle cx="340" cy="159" r="5"/><circle cx="466" cy="159" r="5"/>
+    <path d="M344 155 L462 136" stroke-linecap="round"/>
   </g>
-  <text x="403" y="62" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2563eb">toggle switch</text>
-  <text x="403" y="126" text-anchor="middle" font-size="11.5" fill="#64748b">held closed = the plugin runs the show</text>
+  <text x="403" y="56"  text-anchor="middle" font-size="12" font-weight="700" fill="#2563eb">toggle 1</text>
+  <text x="403" y="126" text-anchor="middle" font-size="12" font-weight="700" fill="#2563eb">toggle 2</text>
+  <text x="403" y="112" text-anchor="middle" font-size="11" fill="#64748b">one set of designs each</text>
 
-  <!-- pushbutton: normally open -->
-  <text x="403" y="150" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2563eb">pushbutton</text>
-  <rect x="378" y="158" width="50" height="12" rx="4" fill="#2563eb"/>
+  <!-- shared pushbutton -->
+  <text x="403" y="200" text-anchor="middle" font-size="12" font-weight="700" fill="#2563eb">pushbutton (shared)</text>
+  <rect x="378" y="208" width="50" height="12" rx="4" fill="#2563eb"/>
   <g stroke="#334155" stroke-width="2" fill="none" stroke-linecap="round">
-    <path d="M403 170 V180"/>
-    <path d="M326 180 H480"/>
-    <path d="M340 196 V184"/>
-    <path d="M466 196 V184"/>
+    <path d="M403 220 V230"/>
+    <path d="M326 230 H480"/>
+    <path d="M340 246 V234"/>
+    <path d="M466 246 V234"/>
   </g>
   <g stroke="#334155" stroke-width="2" fill="#ffffff">
-    <circle cx="340" cy="196" r="5"/>
-    <circle cx="466" cy="196" r="5"/>
+    <circle cx="340" cy="246" r="5"/><circle cx="466" cy="246" r="5"/>
   </g>
-  <text x="403" y="224" text-anchor="middle" font-size="11.5" fill="#64748b">each press = the next design</text>
+  <text x="403" y="274" text-anchor="middle" font-size="11" fill="#64748b">advances within the set that is switched on</text>
 
   <g stroke="#334155" stroke-width="2" fill="none" stroke-linecap="round">
-    <path d="M612 99 V263"/>
-    <path d="M612 196 V263"/>
-    <path d="M612 263 V279"/>
-    <path d="M594 279 H630 M600 287 H624 M606 295 H618"/>
+    <path d="M612 89 V302"/>
+    <path d="M612 159 V302"/>
+    <path d="M612 246 V302"/>
+    <path d="M612 302 V318"/>
+    <path d="M594 318 H630 M600 326 H624 M606 334 H618"/>
   </g>
-  <text x="644" y="283" font-size="11.5" fill="#64748b">ground</text>
+  <text x="644" y="322" font-size="11.5" fill="#64748b">ground</text>
 
-  <rect x="34" y="322" width="692" height="1" fill="#e2e8f0"/>
-  <text x="34" y="342" font-size="11.5" fill="#475569">The defaults match this exactly: &#8220;closes to Ground (active low)&#8221; + &#8220;Internal pull-up&#8221;.</text>
-  <text x="34" y="357" font-size="11.5" fill="#475569">The pull-up holds each pin high while its switch is open.</text>
+  <rect x="34" y="352" width="692" height="1" fill="#e2e8f0"/>
+  <text x="34" y="372" font-size="11.5" fill="#475569">Add as many toggles as you have free pins — one per set. Defaults match this: &#8220;closes to Ground&#8221; + &#8220;Internal pull-up&#8221;.</text>
+  <text x="34" y="387" font-size="11.5" fill="#475569">Close two at once and the one flipped most recently wins. A rotary selector works the same way: one pin per position.</text>
 </svg>

@@ -125,6 +125,20 @@ $ps_cfg = ps_cfg_read();
 #ps .tag.seq{background:var(--acc2);color:var(--acc)}
 #ps .tag.miss{background:var(--bad2);color:var(--bad)}
 #ps .d .acts{display:flex;align-items:center;gap:3px;flex:none}
+#ps .tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px;padding:4px;background:var(--line2);border-radius:11px}
+#ps .tabs button{background:transparent;color:var(--tx2);border:0;padding:6px 13px;border-radius:8px;font-weight:600;font-size:13px}
+#ps .tabs button:hover{background:var(--bg);color:var(--tx)}
+#ps .tabs button.on{background:var(--bg);color:var(--tx);box-shadow:var(--shadow)}
+#ps .tabs button .n{color:var(--tx3);font-weight:600;margin-left:5px;font-size:11.5px}
+#ps .d .led2{width:11px;height:11px;border-radius:50%;background:var(--line);flex:none;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.10);transition:.15s}
+#ps .d .led2.on{background:var(--ok);box-shadow:0 0 0 3px var(--ok2)}
+#ps .d .led2.err{background:var(--bad);box-shadow:0 0 0 3px var(--bad2)}
+#ps .d .setsel{font-size:12px;padding:4px 6px;border-radius:7px;max-width:130px}
+#ps .d .nm{flex:1;min-width:0}
+#ps .d .nm input{border:1px solid transparent;background:transparent;padding:3px 6px;border-radius:6px;
+  font-weight:600;font-size:14px;width:100%;color:var(--tx)}
+#ps .d .nm input:hover{border-color:var(--line)}
 #ps .empty{text-align:center;padding:26px 16px;color:var(--tx2);border:1px dashed var(--line);
   border-radius:11px;font-size:13.5px}
 #ps .addbar{display:flex;gap:9px;align-items:flex-end;flex-wrap:wrap;margin-top:14px;
@@ -185,9 +199,9 @@ $ps_cfg = ps_cfg_read();
     <span class="tiny" style="font-weight:600">Plugin</span>
     <label class="sw"><input type="checkbox" id="ps-enabled" <?php echo $ps_cfg['enabled'] === '1' ? 'checked' : ''; ?>><span class="sl"></span></label>
   </div>
-  <p class="lede">Two GPIO pins drive the show. A <b>toggle switch</b> hands playback to the plugin;
-  a <b>pushbutton</b> steps through your ordered list of designs. Whatever is selected keeps looping
-  until you press the button again or flip the switch off.</p>
+  <p class="lede">GPIO switches drive the show. Each <b>toggle switch</b> hands playback to the plugin and picks
+  its own set of designs; a shared <b>pushbutton</b> steps through whichever set is switched on. Whatever is
+  selected keeps looping until you press the button again or open the switch.</p>
 
   <div id="ps-banner"></div>
 
@@ -209,8 +223,25 @@ $ps_cfg = ps_cfg_read();
   </div>
 
   <div class="card">
+    <div class="hd"><span class="t">Switches</span><span class="tiny" id="ps-scount"></span></div>
+    <div class="bd">
+      <div class="dl" id="ps-sets"></div>
+      <div class="addbar">
+        <div class="fld" style="flex:1.2"><label>Name</label>
+          <input type="text" id="ps-set-name" placeholder="e.g. Christmas"></div>
+        <div class="fld"><label>Toggle pin</label><select id="ps-set-pin"></select></div>
+        <button id="ps-set-add">Add switch</button>
+      </div>
+      <div class="tiny" style="margin-top:10px">Each switch owns its own set of designs and remembers which one
+      it was showing. Close two at once and the one flipped most recently wins; open it again and the plugin falls
+      back to whichever is still closed. A rotary selector works the same way — wire one pin per position.</div>
+    </div>
+  </div>
+
+  <div class="card">
     <div class="hd"><span class="t">Designs</span><span class="tiny" id="ps-dcount"></span></div>
     <div class="bd">
+      <div class="tabs" id="ps-tabs"></div>
       <div class="dl" id="ps-list"></div>
       <div class="addbar">
         <div class="fld" style="max-width:150px">
@@ -233,30 +264,9 @@ $ps_cfg = ps_cfg_read();
   </div>
 
   <div class="card">
-    <div class="hd"><span class="t">Inputs</span></div>
+    <div class="hd"><span class="t">Pushbutton</span></div>
     <div class="bd">
       <div class="grid">
-        <div class="fld">
-          <label>Enable pin — toggle switch</label>
-          <select id="ps-enable_pin"></select>
-          <div class="hint">Held in one position = the plugin runs the show. With no pin set, the plugin stays out of the way unless the software override below is on.</div>
-        </div>
-        <div class="fld">
-          <label>Switch closes to</label>
-          <select id="ps-enable_active_low">
-            <option value="1">Ground (active low)</option>
-            <option value="0">3.3&nbsp;V (active high)</option>
-          </select>
-        </div>
-        <div class="fld">
-          <label>Switch resistor</label>
-          <select id="ps-enable_pull">
-            <option value="gpio_pu">Internal pull-up</option>
-            <option value="gpio_pd">Internal pull-down</option>
-            <option value="gpio">None / external</option>
-          </select>
-        </div>
-
         <div class="fld">
           <label>Next pin — pushbutton</label>
           <select id="ps-next_pin"></select>
@@ -287,9 +297,10 @@ $ps_cfg = ps_cfg_read();
           <label>Software override</label>
           <div class="rowline">
             <label class="sw"><input type="checkbox" id="ps-virtual_enable"><span class="sl"></span></label>
-            <span class="tiny">Act as if the switch were on</span>
+            <span class="tiny">Act as if a switch were on</span>
+            <select id="ps-virtual_set" style="display:none"></select>
           </div>
-          <div class="hint">For testing before the switch is wired.</div>
+          <div class="hint">For testing before the switches are wired.</div>
         </div>
       </div>
     </div>
@@ -395,7 +406,8 @@ $ps_cfg = ps_cfg_read();
 <script>
 (function(){
   var BASE = 'plugin.php?plugin=pixelselect&page=';
-  var D = [], PINS = [], SEQ = [], PL = [], CFG = {}, saveTimer = null, dragFrom = -1;
+  var D = [], SETS = [], PINS = [], SEQ = [], PL = [], CFG = {}, saveTimer = null, dragFrom = -1;
+  var curSet = 0, liveSets = [];
   function $(id){ return document.getElementById(id); }
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
@@ -416,8 +428,8 @@ $ps_cfg = ps_cfg_read();
 
   /* ---------------------------------------------------------------- settings */
   var BOOLS = ['enabled','virtual_enable','repeat','wrap','resume_last','keep_playing','takeover','hand_back'];
-  var VALS  = ['enable_pin','enable_active_low','enable_pull','next_pin','next_active_low',
-               'next_pull','debounce_ms','stop_mode','long_press_action','long_press_ms'];
+  var VALS  = ['next_pin','next_active_low','next_pull','debounce_ms','stop_mode',
+               'long_press_action','long_press_ms','virtual_set'];
 
   function applyConfig(c){
     CFG = c;
@@ -454,25 +466,117 @@ $ps_cfg = ps_cfg_read();
   function saveDesigns(cb){
     clearTimeout(saveTimer);
     post('designs', {designs: JSON.stringify(D)}, function(r){
-      if (r.ok) { D = r.designs; render(); toast('Design list saved'); }
+      if (r.ok) { D = r.designs; renderTabs(); renderSets(); render(); toast('Design list saved'); }
       else toast(r.error || 'Could not save the list', true);
       if (cb) cb(r);
     });
   }
   function queueSave(){ clearTimeout(saveTimer); saveTimer = setTimeout(saveDesigns, 600); }
 
+  /* ---------------------------------------------------------------- switches */
+  function pinOptions(cur){
+    var o = '<option value="">— not used —</option>';
+    PINS.forEach(function(p){ o += '<option value="' + esc(p.pin) + '">' + esc(p.pin) + '</option>'; });
+    if (cur && !PINS.some(function(p){ return p.pin === cur; }))
+      o += '<option value="' + esc(cur) + '">' + esc(cur) + ' (not on this board)</option>';
+    return o;
+  }
+  function saveSets(cb){
+    post('sets', {sets: JSON.stringify(SETS)}, function(r){
+      if (r.ok){ SETS = r.sets; D = r.designs; if (curSet >= SETS.length) curSet = 0;
+                 renderSets(); render(); toast('Switches saved'); }
+      else toast(r.error || 'Could not save the switches', true);
+      if (cb) cb(r);
+    });
+  }
+  function renderSets(){
+    var wrap = $('ps-sets');
+    $('ps-scount').textContent = SETS.length + (SETS.length === 1 ? ' switch' : ' switches');
+    var h = '';
+    SETS.forEach(function(st, i){
+      var live = liveSets[i] || {};
+      var cls = !st.pin ? '' : (live.ok === false ? ' err' : (live.on ? ' on' : ''));   // live pin state
+      var n = D.filter(function(d){ return d.set === i; }).length;
+      h += '<div class="d" data-s="' + i + '">' +
+             '<span class="led2' + cls + '" title="Live switch state"></span>' +
+             '<span class="idx">' + (i+1) + '</span>' +
+             '<div class="nm"><input type="text" value="' + esc(st.name) + '" data-sname="' + i + '" ' +
+               'aria-label="Name for switch ' + (i+1) + '"></div>' +
+             '<select class="setsel" data-spin="' + i + '">' + pinOptions(st.pin) + '</select>' +
+             '<select class="setsel" data-slow="' + i + '">' +
+               '<option value="1">to ground</option><option value="0">to 3.3&nbsp;V</option></select>' +
+             '<select class="setsel" data-spull="' + i + '">' +
+               '<option value="gpio_pu">pull-up</option><option value="gpio_pd">pull-down</option>' +
+               '<option value="gpio">no pull</option></select>' +
+             '<span class="tiny" style="width:74px;text-align:right">' + n + (n === 1 ? ' design' : ' designs') + '</span>' +
+             '<div class="acts">' +
+               (SETS.length > 1 ? '<button class="danger" data-sdel="' + i + '" title="Remove">✕</button>' : '') +
+             '</div>' +
+           '</div>';
+    });
+    wrap.innerHTML = h;
+    wrap.querySelectorAll('[data-spin]').forEach(function(e){ e.value = SETS[+e.dataset.spin].pin || ''; });
+    wrap.querySelectorAll('[data-slow]').forEach(function(e){ e.value = SETS[+e.dataset.slow].active_low ? '1' : '0'; });
+    wrap.querySelectorAll('[data-spull]').forEach(function(e){ e.value = SETS[+e.dataset.spull].pull || 'gpio_pu'; });
+    wrap.querySelectorAll('[data-sname]').forEach(function(e){
+      e.addEventListener('input', function(){ SETS[+e.dataset.sname].name = e.value; clearTimeout(saveTimer); saveTimer = setTimeout(saveSets, 700); });
+    });
+    wrap.querySelectorAll('[data-spin]').forEach(function(e){
+      e.addEventListener('change', function(){ SETS[+e.dataset.spin].pin = e.value; saveSets(); });
+    });
+    wrap.querySelectorAll('[data-slow]').forEach(function(e){
+      e.addEventListener('change', function(){ SETS[+e.dataset.slow].active_low = (e.value === '1'); saveSets(); });
+    });
+    wrap.querySelectorAll('[data-spull]').forEach(function(e){
+      e.addEventListener('change', function(){ SETS[+e.dataset.spull].pull = e.value; saveSets(); });
+    });
+    wrap.querySelectorAll('[data-sdel]').forEach(function(e){
+      e.addEventListener('click', function(){
+        var i = +e.dataset.sdel;
+        var n = D.filter(function(d){ return d.set === i; }).length;
+        if (n && !confirm('Remove "' + SETS[i].name + '"? Its ' + n + ' design(s) move to ' + SETS[0].name + '.')) return;
+        SETS.splice(i, 1);
+        D.forEach(function(d){ if (d.set === i) d.set = 0; else if (d.set > i) d.set--; });
+        post('designs', {designs: JSON.stringify(D)}, function(){ saveSets(); });
+      });
+    });
+    // the software override needs to say which switch it stands in for
+    var vs = $('ps-virtual_set');
+    vs.style.display = SETS.length > 1 ? '' : 'none';
+    vs.innerHTML = SETS.map(function(st, i){ return '<option value="' + i + '">' + esc(st.name) + '</option>'; }).join('');
+    vs.value = CFG.virtual_set || '0';
+    $('ps-set-pin').innerHTML = pinOptions('');
+  }
+
+  function renderTabs(){
+    var t = $('ps-tabs');
+    t.style.display = SETS.length > 1 ? '' : 'none';
+    t.innerHTML = SETS.map(function(st, i){
+      var n = D.filter(function(d){ return d.set === i; }).length;
+      return '<button data-tab="' + i + '" class="' + (i === curSet ? 'on' : '') + '">' +
+             esc(st.name) + '<span class="n">' + n + '</span></button>';
+    }).join('');
+    t.querySelectorAll('[data-tab]').forEach(function(b){
+      b.addEventListener('click', function(){ curSet = +b.dataset.tab; renderTabs(); render(); });
+    });
+  }
+
   function render(){
     var wrap = $('ps-list');
-    $('ps-dcount').textContent = D.length ? (D.length + (D.length === 1 ? ' design' : ' designs')) : '';
-    if (!D.length){
-      wrap.innerHTML = '<div class="empty">No designs yet. Add one below — the pushbutton walks this list in order.</div>';
+    if (curSet >= SETS.length) curSet = 0;
+    var mine = D.map(function(d, i){ return {d: d, i: i}; }).filter(function(x){ return x.d.set === curSet; });
+    $('ps-dcount').textContent = mine.length ? (mine.length + (mine.length === 1 ? ' design' : ' designs')) : '';
+    if (!mine.length){
+      wrap.innerHTML = '<div class="empty">No designs on this switch yet. Add one below — the pushbutton walks this list in order.</div>';
       return;
     }
+    var setOpts = SETS.map(function(st, si){ return '<option value="' + si + '">' + esc(st.name) + '</option>'; }).join('');
     var h = '';
-    D.forEach(function(d, i){
+    mine.forEach(function(x, pos){
+      var d = x.d, i = x.i;
       h += '<div class="d' + (d.enabled ? '' : ' off') + '" data-i="' + i + '" draggable="true">' +
              '<span class="hnd" title="Drag to reorder">⣿</span>' +
-             '<span class="idx">' + (i+1) + '</span>' +
+             '<span class="idx">' + (pos+1) + '</span>' +
              '<div class="mid">' +
                '<div class="lb"><input type="text" value="' + esc(d.label) + '" data-lab="' + i + '" ' +
                  'aria-label="Name for design ' + (i+1) + '"></div>' +
@@ -483,6 +587,7 @@ $ps_cfg = ps_cfg_read();
                '</div>' +
              '</div>' +
              '<div class="acts">' +
+               (SETS.length > 1 ? '<select class="setsel" data-move="' + i + '" title="Move to another switch">' + setOpts + '</select>' : '') +
                '<button class="ghost" data-play="' + i + '" title="Play this now">▶</button>' +
                '<label class="sw" title="Include in the button order"><input type="checkbox" data-en="' + i + '"' +
                  (d.enabled ? ' checked' : '') + '><span class="sl"></span></label>' +
@@ -491,6 +596,7 @@ $ps_cfg = ps_cfg_read();
            '</div>';
     });
     wrap.innerHTML = h;
+    wrap.querySelectorAll('[data-move]').forEach(function(e){ e.value = D[+e.dataset.move].set; });
     wire(wrap);
     markCurrent();
   }
@@ -501,6 +607,9 @@ $ps_cfg = ps_cfg_read();
     });
     wrap.querySelectorAll('[data-en]').forEach(function(e){
       e.addEventListener('change', function(){ D[+e.dataset.en].enabled = e.checked; saveDesigns(); });
+    });
+    wrap.querySelectorAll('[data-move]').forEach(function(e){
+      e.addEventListener('change', function(){ D[+e.dataset.move].set = +e.value; saveDesigns(); });
     });
     wrap.querySelectorAll('[data-del]').forEach(function(e){
       e.addEventListener('click', function(){ D.splice(+e.dataset.del, 1); saveDesigns(); });
@@ -549,7 +658,7 @@ $ps_cfg = ps_cfg_read();
     $('ps-add-btn').disabled = !src.length;
   }
   function fillPins(){
-    ['enable_pin','next_pin'].forEach(function(k){
+    ['next_pin'].forEach(function(k){
       var sel = $('ps-' + k), cur = CFG[k] || '';
       var opts = '<option value="">— not used —</option>';
       PINS.forEach(function(p){ opts += '<option value="' + esc(p.pin) + '">' + esc(p.pin) + '</option>'; });
@@ -563,6 +672,14 @@ $ps_cfg = ps_cfg_read();
   /* ------------------------------------------------------------------ status */
   function banner(html, kind){
     $('ps-banner').innerHTML = html ? '<div class="banner ' + kind + '">' + html + '</div>' : '';
+  }
+  // Only the lamps move on a poll - rewriting the rows would fight the inputs.
+  function renderSetLamps(){
+    document.querySelectorAll('#ps-sets .d').forEach(function(row){
+      var i = +row.dataset.s, live = liveSets[i] || {}, lamp = row.querySelector('.led2');
+      if (!lamp) return;
+      lamp.className = 'led2' + (!SETS[i] || !SETS[i].pin ? '' : (live.ok === false ? ' err' : (live.on ? ' on' : '')));
+    });
   }
   function poll(){
     fetch(BASE + 'status.php&nopage=1', {credentials:'same-origin'})
@@ -583,17 +700,19 @@ $ps_cfg = ps_cfg_read();
         if (s.pinError) banner('<span><b>Pin problem:</b> ' + esc(s.pinError) + '</span>', 'bad');
         else if (!s.pluginEnabled) banner('<span>The plugin is switched off, so the inputs are ignored. '
                + 'Turn it on with the toggle at the top right.</span>', 'warn');
-        else if (!s.count) banner('<span>No designs in the list yet — add at least one below.</span>', 'warn');
+        else if (!s.totalDesigns) banner('<span>No designs in the list yet — add at least one below.</span>', 'warn');
         else banner('', '');
 
+        if (s.sets) { liveSets = s.sets; renderSetLamps(); }
         window._psIndex = s.index;
-        $('ps-title').textContent = (s.index >= 0 && s.label) ? s.label : (s.count ? 'Nothing selected' : 'No designs');
+        $('ps-title').textContent = (s.index >= 0 && s.label) ? s.label : (s.totalDesigns ? 'Nothing selected' : 'No designs');
         var bits = [];
         if (!s.pluginEnabled) bits.push('plugin off');
         else if (!s.active) bits.push('waiting for the switch');
         else bits.push(s.playing ? 'playing' : 'starting…');
         if (s.name) bits.push(s.name);
-        if (s.count) bits.push((s.index + 1) + ' of ' + s.count);
+        if (s.count) bits.push(((s.pos >= 0 ? s.pos : 0) + 1) + ' of ' + s.count);
+        if (s.active && s.activeSetName && (s.setCount > 1)) bits.push('switch: ' + s.activeSetName);
         if (s.active && s.repeat) bits.push('looping');
         if (s.active && s.heldByOther) bits.push(s.takeover ? 'taking the player back…' : 'something else has the player');
         if (s.reclaims) bits.push('took over ' + s.reclaims + '\u00d7');
@@ -602,8 +721,9 @@ $ps_cfg = ps_cfg_read();
 
         var sw = $('ps-lamp-sw');
         sw.className = 'lamp' + (!s.switchConfigured ? '' : (!s.switchOk ? ' err' : (s.switchOn ? ' on' : '')));
-        $('ps-sw-v').textContent = !s.switchConfigured ? (s.virtualEnable ? 'override' : 'no pin')
-                                 : (!s.switchOk ? 'error' : (s.switchOn ? 'on' : 'off'));
+        $('ps-sw-v').textContent = s.virtualEnable ? 'override'
+                                 : (!s.switchConfigured ? 'no pin'
+                                 : (!s.switchOk ? 'error' : (s.switchOn ? 'on' : 'off')));
         var bt = $('ps-lamp-bt');
         bt.className = 'lamp' + (!s.buttonConfigured ? '' : (!s.buttonOk ? ' err' : (s.buttonDown ? ' hit' : '')));
         $('ps-bt-v').textContent = !s.buttonConfigured ? 'no pin'
@@ -617,9 +737,17 @@ $ps_cfg = ps_cfg_read();
   function load(){
     post('lists', {}, function(r){
       if (!r.ok){ toast('Could not load plugin data', true); return; }
-      SEQ = r.sequences || []; PL = r.playlists || []; PINS = r.pins || []; D = r.designs || [];
+      SEQ = r.sequences || []; PL = r.playlists || []; PINS = r.pins || [];
+      D = r.designs || []; SETS = r.sets || [];
       applyConfig(r.config || {});
-      fillPins(); fillAddNames(); render();
+      // A throw in here used to leave the page silently half-drawn, which is a
+      // miserable thing to debug from a screenshot.
+      try {
+        fillPins(); fillAddNames(); renderSets(); renderTabs(); render();
+      } catch (e) {
+        console.error('pixelselect: ' + (e && e.stack ? e.stack : e));
+        toast('Page failed to draw: ' + (e && e.message ? e.message : e), true);
+      }
     });
   }
 
@@ -627,10 +755,16 @@ $ps_cfg = ps_cfg_read();
   $('ps-add-btn').addEventListener('click', function(){
     var name = $('ps-add-name').value;
     if (!name){ toast('Nothing to add', true); return; }
-    D.push({type: $('ps-add-type').value, name: name,
+    D.push({type: $('ps-add-type').value, name: name, set: curSet,
             label: $('ps-add-label').value.trim() || name.replace(/\.fseq$/i, ''), enabled: true});
     $('ps-add-label').value = '';
     saveDesigns();
+  });
+  $('ps-set-add').addEventListener('click', function(){
+    var nm = $('ps-set-name').value.trim() || ('Set ' + (SETS.length + 1));
+    SETS.push({name: nm, pin: $('ps-set-pin').value, active_low: true, pull: 'gpio_pu'});
+    $('ps-set-name').value = '';
+    saveSets(function(r){ if (r.ok) { curSet = SETS.length - 1; renderTabs(); render(); } });
   });
   $('ps-btn-next').addEventListener('click', function(){ post('cmd', {cmd:'next'}, function(r){ if(!r.ok) toast(r.error||'Failed', true); }); });
   $('ps-btn-restart').addEventListener('click', function(){ post('cmd', {cmd:'restart'}, function(r){ if(!r.ok) toast(r.error||'Failed', true); }); });

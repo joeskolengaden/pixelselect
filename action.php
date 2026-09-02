@@ -24,6 +24,7 @@ if ($action === 'lists') {
         'sequences' => ps_available_sequences(),
         'playlists' => ps_available_playlists(),
         'pins'      => ps_pin_list(),
+        'sets'      => ps_sets_read(),
         'config'    => ps_cfg_read(),
         'designs'   => ps_designs_read(),
     ));
@@ -33,7 +34,8 @@ if ($action === 'save') {
     $cfg = ps_cfg_read();
     $bools = array('enabled', 'virtual_enable', 'enable_active_low', 'next_active_low',
                    'repeat', 'wrap', 'resume_last', 'keep_playing', 'takeover', 'hand_back');
-    $ints  = array('debounce_ms' => array(1, 1000), 'long_press_ms' => array(0, 10000));
+    $ints  = array('debounce_ms' => array(1, 1000), 'long_press_ms' => array(0, 10000),
+                   'virtual_set' => array(0, 31));
     $enums = array(
         'enable_pull'       => array('gpio', 'gpio_pu', 'gpio_pd'),
         'next_pull'         => array('gpio', 'gpio_pu', 'gpio_pd'),
@@ -62,11 +64,47 @@ if ($action === 'save') {
             ps_out(false, array('error' => 'Invalid pin name'));
         $cfg[$k] = $v;
     }
-    if ($cfg['enable_pin'] !== '' && $cfg['enable_pin'] === $cfg['next_pin'])
-        ps_out(false, array('error' => 'The switch and the button must use different pins'));
+    if ($cfg['next_pin'] !== '') {
+        foreach (ps_sets_read() as $st) {
+            if ($st['pin'] !== '' && $st['pin'] === $cfg['next_pin'])
+                ps_out(false, array('error' => 'The pushbutton cannot share a pin with the "' . $st['name'] . '" switch'));
+        }
+    }
 
     if (!ps_cfg_write($cfg)) ps_out(false, array('error' => 'Could not write the settings file'));
     ps_out(true, array('config' => $cfg));
+}
+
+if ($action === 'sets') {
+    $list = json_decode(isset($_POST['sets']) ? $_POST['sets'] : '', true);
+    if (!is_array($list) || !count($list)) ps_out(false, array('error' => 'Need at least one switch'));
+    if (count($list) > 32) ps_out(false, array('error' => 'Too many switches (32 max)'));
+
+    $seen = array();
+    foreach ($list as $s) {
+        $pin = isset($s['pin']) ? trim($s['pin']) : '';
+        if ($pin === '') continue;
+        if (!preg_match('/^[A-Za-z0-9_.\-]{1,32}$/', $pin))
+            ps_out(false, array('error' => 'Invalid pin name'));
+        if (isset($seen[$pin])) ps_out(false, array('error' => 'Two switches cannot share pin ' . $pin));
+        $seen[$pin] = true;
+    }
+    $cfg = ps_cfg_read();
+    if ($cfg['next_pin'] !== '' && isset($seen[$cfg['next_pin']]))
+        ps_out(false, array('error' => 'A switch cannot use the pushbutton pin (' . $cfg['next_pin'] . ')'));
+
+    if (!ps_sets_write($list)) ps_out(false, array('error' => 'Could not write the switch list'));
+
+    // Designs pointing at a set that no longer exists fall back to the first.
+    $designs = ps_designs_read(false);
+    $changed = false;
+    foreach ($designs as &$d) {
+        if ($d['set'] >= count($list)) { $d['set'] = 0; $changed = true; }
+    }
+    unset($d);
+    if ($changed) ps_designs_write($designs);
+
+    ps_out(true, array('sets' => ps_sets_read(), 'designs' => ps_designs_read()));
 }
 
 if ($action === 'designs') {
@@ -77,6 +115,7 @@ if ($action === 'designs') {
 
     $seqs = ps_available_sequences();
     $pls  = ps_available_playlists();
+    $nsets = count(ps_sets_read());
     $clean = array();
     foreach ($list as $d) {
         if (!is_array($d) || !isset($d['name'])) continue;
@@ -86,11 +125,14 @@ if ($action === 'designs') {
         // Reject anything that is not actually on this device - a stale name would
         // just make the button appear to do nothing.
         $known = ($type === 'playlist') ? in_array($name, $pls, true) : in_array($name, $seqs, true);
+        $set = isset($d['set']) ? (int)$d['set'] : 0;
+        if ($set < 0 || $set >= $nsets) $set = 0;
         $clean[] = array(
             'type'    => $type,
             'name'    => $name,
             'label'   => ps_clean(isset($d['label']) ? $d['label'] : $name),
             'enabled' => !empty($d['enabled']),
+            'set'     => $set,
             'missing' => !$known,
         );
     }

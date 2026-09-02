@@ -2,10 +2,14 @@
 
 An FPP plugin for a display that people walk up to.
 
-A **toggle switch** hands playback to the plugin. A **pushbutton** steps through
-an ordered list of your own designs. Whatever is selected keeps looping until the
-button is pressed again or the switch is flipped off — and while the switch is
-on, the plugin holds the player against anything else that tries to take it.
+A **toggle switch** hands playback to the plugin and chooses a set of designs. A
+**pushbutton** steps through that set. Whatever is selected keeps looping until
+the button is pressed again or the switch is flipped off — and while the switch
+is on, the plugin holds the player against anything else that tries to take it.
+
+Add as many toggle switches as you have free pins. Each one owns its own set of
+designs and remembers which one it was showing, so a panel can offer "Christmas",
+"Halloween" and "Quiet" as three separate switches with one shared button.
 
 Both pins are chosen in the plugin's own UI. There is no FPP GPIO Inputs entry to
 create and no FPP Command to wire up. The settings page shows both inputs live and
@@ -25,6 +29,7 @@ Verified end to end on a BeagleBone Green running FPP 5.4.1.
 ## Contents
 
 - [How it behaves](#how-it-behaves)
+- [Several switches, one set each](#several-switches-one-set-each)
 - [What a design is](#what-a-design-is)
 - [Install](#install)
 - [Wiring](#wiring)
@@ -42,18 +47,43 @@ Verified end to end on a BeagleBone Green running FPP 5.4.1.
 
 | Event | What happens |
 |---|---|
-| Switch closes | The selected design starts and loops. Whatever was playing is interrupted. |
-| Button press | Jump to the next enabled design in the list and start it. |
+| A switch closes | That switch's selected design starts and loops. Whatever was playing is interrupted. |
+| Button press | Jump to the next enabled design **in that switch's set** and start it. |
+| A second switch closes | Hand over to its set. The most recently closed switch wins. |
+| That switch opens again | Fall back to whichever switch is still closed. |
 | Button press on the last one | Wrap to the first (or hold, if wrap is off). |
 | Something else grabs the player | The plugin takes it back within a few seconds. |
 | Playback stops on its own | The selected design is started again. |
-| Switch opens | Playback stops, and FPP's schedule is handed back. |
-| Power cycle | The design that was selected last is remembered. |
+| Every switch open | Playback stops, and FPP's schedule is handed back. |
+| Power cycle | Each switch remembers the design it was last showing. |
 
 The header of the settings page mirrors all of this live — the current design, and
 a lamp per pin that follows the real pin level:
 
 ![Live status: current design, switch and button lamps, and manual controls](docs/ui-status.png)
+
+## Several switches, one set each
+
+Each switch is a row in the **Switches** card: a name, its pin, and how it is
+wired. The lamp on the left follows the real pin level, so you can confirm the
+wiring before adding a single design.
+
+![The Switches card: three named switches, each with a pin and a live lamp](docs/ui-switches.png)
+
+The rules when more than one is closed:
+
+- **The most recently closed switch wins.** Flipping a new one hands over
+  immediately.
+- **Opening it falls back** to whichever switch is still closed, rather than
+  going dark.
+- **With every switch open** the plugin stops and gives the schedule back.
+
+That is also exactly what a **rotary selector switch** needs — wire one pin per
+position and it behaves as you would expect, because only one position is ever
+closed.
+
+Each switch keeps its own place in its own list, so flipping away and back
+returns to the design that switch was showing.
 
 ## What a design is
 
@@ -64,12 +94,16 @@ Either of the two things already on your device:
 | **Sequence** | an `.fseq` in `media/sequences`, straight out of xLights | FPP builds a one-item playlist for it and repeats that. It also picks up the audio file named inside the fseq header, so a musical sequence just works |
 | **Playlist** | an FPP playlist, built however you like | the whole playlist repeats |
 
-Mix both in one list, rename each entry to something an audience would recognise,
-drag them into the order the button should walk, and switch entries off without
-deleting them. An entry whose sequence or playlist is no longer on the device is
+Every design belongs to one switch. With more than one switch the design list
+grows a tab per switch; the **Add design** row adds into the tab you are looking
+at, and the dropdown on each row moves a design to a different switch.
+
+Mix both types in one set, rename each entry to something an audience would
+recognise, drag them into the order the button should walk, and switch entries
+off without deleting them. An entry whose sequence or playlist is no longer on the device is
 badged **missing** rather than silently doing nothing when the button reaches it.
 
-![The design list: drag handles, SEQ and LIST badges, per-row enable and play, a missing entry](docs/ui-designs.png)
+![The design list, with a tab per switch](docs/ui-designs.png)
 
 ## Install
 
@@ -99,7 +133,7 @@ restart.
 The defaults assume the simplest possible wiring: each switch sits between its pin
 and ground, with FPP's internal pull-up holding the pin high while it is open.
 
-![Wiring: a toggle switch and a pushbutton, each between a GPIO pin and ground](docs/wiring.png)
+![Wiring: two toggle switches and a shared pushbutton, each between a GPIO pin and ground](docs/wiring.png)
 
 If you wire to 3.3 V instead, set *"closes to"* to **3.3 V (active high)** and the
 resistor to **Internal pull-down** for that pin. If you fitted your own resistors,
@@ -109,26 +143,36 @@ choose **None / external**.
 comes from FPP itself, so BeagleBone names look like `P8-11` / `P9-15` and
 Raspberry Pi like `P1-11`. Two things to avoid:
 
+- **The pushbutton pin, or another switch's pin.** The plugin refuses to save a
+  duplicate, but it is worth knowing before you solder.
 - **Any pin listed on Input/Output Setup → GPIO Inputs.** FPP claims those for its
   own command triggers and the two will fight. On a cape with an OLED, the
   navigation buttons usually live there (`P9-17`, `P9-18`, `P9-21`, `P9-22`, `P9-26`).
 - **Any pin your cape uses for outputs.** On a 48-string BeagleBone cape that is
   most of the P8 header, which is why the P9 side is usually the free one.
 
-![The Inputs card: pin pickers, polarity, pull resistor, debounce, software override](docs/ui-inputs.png)
+![The Pushbutton card: pin, polarity, pull resistor, debounce, software override](docs/ui-button.png)
 
 ## Settings
 
-### Inputs
+### Switches
 
 | Setting | Default | Notes |
 |---|---|---|
-| Enable pin | — | The toggle switch. With none set the plugin never takes over playback, so it cannot fight a schedule; use the software override to run without a switch. |
-| Next pin | — | The momentary pushbutton. |
+| Name | — | Shown on the design tabs and on the status header. |
+| Toggle pin | — | A switch with no pin never becomes active, so an unconfigured plugin cannot fight a schedule. |
 | Closes to | Ground | Ground for a switch wired to GND, 3.3 V for the other polarity. |
 | Resistor | Internal pull-up | Match it to the wiring. |
+
+### Pushbutton
+
+| Setting | Default | Notes |
+|---|---|---|
+| Next pin | — | The momentary pushbutton, shared by every switch. |
+| Closes to | Ground | As above. |
+| Resistor | Internal pull-up | As above. |
 | Debounce | 30 ms | How long an input must hold steady before it counts. Raise it if one press advances two designs. |
-| Software override | off | Behave as if the switch were closed. For testing before it is wired. |
+| Software override | off | Behave as if a switch were closed, and choose which one. For testing before anything is wired. |
 
 ### Behaviour
 
@@ -192,9 +236,10 @@ You do not need the switches to set this up.
 1. Add your designs and pick your pins.
 2. Turn on **Software override** in Inputs — the plugin behaves as though the
    switch were closed.
-3. Use **Next design ›**, **Restart** and **Stop** at the top of the page, or the
+3. Pick which switch it stands in for, if you have more than one.
+4. Use **Next design ›**, **Restart** and **Stop** at the top of the page, or the
    ▶ button on any row, as a virtual pushbutton.
-4. Turn the override back off. Now wire the real switches and watch the two lamps
+5. Turn the override back off. Now wire the real switches and watch the lamps
    follow them.
 
 ## How it works
@@ -216,8 +261,9 @@ Files the plugin owns:
 | Path | What |
 |---|---|
 | `config/plugin.pixelselect` | settings, written by the UI |
-| `config/pixelselect_designs.tsv` | the ordered design list |
-| `config/pixelselect_state.txt` | which design was selected last |
+| `config/pixelselect_sets.tsv` | the switches, in order: name, pin, polarity, pull |
+| `config/pixelselect_designs.tsv` | the ordered design list, each row naming its switch |
+| `config/pixelselect_state.txt` | the design each switch was last showing |
 | `/dev/shm/pixelselect_status.json` | live status for the UI |
 | `/dev/shm/pixelselect_pins.json` | the board's pin names, for the UI pickers |
 | `/dev/shm/pixelselect_cmd` | one-shot commands from the UI's virtual button |
@@ -230,7 +276,8 @@ macro, because that macro changed shape between 5.4 and 9.x.
 ## Tests
 
 The behaviour that is annoying to debug on a Beagle — debounce, ordering, the
-enable/next state machine, takeover and hand-back — runs on a laptop:
+switch/next state machine, handover between switches, takeover and hand-back —
+runs on a laptop:
 
 ```bash
 FPPSRC=/path/to/fpp-checkout ./tests/run.sh
@@ -239,9 +286,10 @@ FPPSRC=/path/to/fpp-checkout ./tests/run.sh
 It compiles the real plugin, `dlopen`s it into a host that stubs the five FPP
 symbols the plugin uses, fakes the two GPIO pins, models what is on air, and
 answers fppd's command endpoint so every `Start Playlist` can be asserted on.
-38 checks, including a bouncing press advancing exactly one design, an enabled
+47 checks, including a bouncing press advancing exactly one design, an enabled
 plugin with no pin staying out of playback, reclaiming the player from something
-else, and handing the schedule back. On a device, `FPPSRC=/opt/fpp` works too.
+else, handing the schedule back, and a second switch taking over without ever
+walking into the first switch's designs. On a device, `FPPSRC=/opt/fpp` works too.
 
 ## Troubleshooting
 
@@ -249,6 +297,7 @@ else, and handing the schedule back. On a device, `FPPSRC=/opt/fpp` works too.
 |---|---|
 | Badge says **not running** | fppd has not been restarted since the install or update, or the build failed — check the install log for `scripts/fpp_install.sh` output. |
 | Lamps never change | Wrong pin, wrong polarity, or the pin is also claimed on FPP's GPIO Inputs page or by your cape. |
+| The button walks the wrong designs | It always walks the set of the switch that is currently closed. Check the tab and the switch lamps. |
 | One press advances two designs | Raise **Debounce**. |
 | An entry is badged **missing** | Its sequence or playlist is no longer on the device — re-upload it or remove the entry. |
 | Nothing plays, but the lamps look right | The design list is empty, or every entry is switched off. |

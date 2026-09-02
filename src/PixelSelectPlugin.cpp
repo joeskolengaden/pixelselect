@@ -44,6 +44,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <map>
 #include <mutex>
 #include <condition_variable>
 #include <sstream>
@@ -106,6 +107,7 @@ std::string shmDir() {
 }
 
 const std::string kDesignsPath = configDir() + "/pixelselect_designs.tsv";
+const std::string kSetsPath    = configDir() + "/pixelselect_sets.tsv";
 const std::string kStatePath   = configDir() + "/pixelselect_state.txt";
 const std::string kStatusPath  = shmDir()    + "/pixelselect_status.json";
 const std::string kPinsPath    = shmDir()    + "/pixelselect_pins.json";
@@ -168,6 +170,7 @@ struct Design {
     std::string name;    // "Foo.fseq" or a playlist name
     std::string label;   // friendly name shown in the UI
     bool enabled = true;
+    int set = 0;         // which switch owns this design
     std::string key() const { return type + "\t" + name; }
 };
 
@@ -236,6 +239,17 @@ struct DebouncedInput {
     }
 };
 
+// One toggle switch and the designs it selects. The pushbutton is shared: it
+// advances within whichever set is currently switched on.
+struct DesignSet {
+    std::string name;
+    std::string pin;
+    std::string pull = "gpio_pu";
+    bool activeLow = true;
+    DebouncedInput in;
+    std::string selectedKey;   // this set remembers its own last design
+};
+
 }  // namespace
 
 class PixelSelectPlugin : public FPPPlugin {
@@ -243,6 +257,7 @@ public:
     PixelSelectPlugin() : FPPPlugin("pixelselect") {
         loadState();
         applySettings();      // base ctor already populated `settings`
+        loadSets(true);
         loadDesigns(true);
         mStart = std::chrono::steady_clock::now();
         mWorker = std::thread([this] { workerLoop(); });
@@ -256,7 +271,7 @@ public:
         mCv.notify_all();
         if (mWorker.joinable()) mWorker.join();
         saveState();
-        mEnableIn.release();
+        for (auto& ds : mSets) ds.in.release();
         mNextIn.release();
     }
 
@@ -286,6 +301,7 @@ private:
         mKeepPlaying   = toBool(cfg("keep_playing"), true);
         mTakeover      = toBool(cfg("takeover"), true);
         mHandBack      = toBool(cfg("hand_back"), true);
+        mVirtualSet    = (int)toLong(cfg("virtual_set"), 0);
     }
 
     // ------------------------------------------------------------- design list
@@ -314,52 +330,157 @@ private:
             d.name    = trim(f[1]);
             d.label   = f.size() > 2 ? trim(f[2]) : d.name;
             d.enabled = f.size() > 3 ? toBool(trim(f[3]), true) : true;
+            d.set     = f.size() > 4 ? (int)toLong(trim(f[4]), 0) : 0;   // absent = set 1
+            if (d.set < 0) d.set = 0;
             if (d.name.empty()) continue;
             if (d.label.empty()) d.label = d.name;
             list.push_back(d);
         }
         mDesigns.swap(list);
+        rebuildSetOrder();
 
         // Keep pointing at the same design across an edit/reorder where possible.
         mIndex = resolveStart();
-        if (mIndex >= 0) mSelectedKey = mDesigns[mIndex].key();
+        if (mIndex >= 0 && mActiveSet >= 0) mSets[mActiveSet].selectedKey = mDesigns[mIndex].key();
+    }
+
+    // ---------------------------------------------------------------- the sets
+    // One line per set: name <TAB> pin <TAB> active_low <TAB> pull. Without the
+    // file (or with it empty) there is a single set built from the original
+    // single-switch settings, so an existing install keeps working untouched.
+    void loadSets(bool force) {
+        long long stamp = fileStamp(kSetsPath.c_str());
+        bool legacyChanged = (mLegacyPin != mEnablePin) || (mLegacyPull != mEnablePull) ||
+                             (mLegacyLow != mEnableLow);
+        if (!force && stamp == mSetsStamp && !legacyChanged) return;
+        mSetsStamp = stamp;
+        mLegacyPin = mEnablePin; mLegacyPull = mEnablePull; mLegacyLow = mEnableLow;
+
+        std::vector<DesignSet> want;
+        std::ifstream in(kSetsPath.c_str());
+        std::string line;
+        while (std::getline(in, line)) {
+            line = trim(line);
+            if (line.empty() || line[0] == '#') continue;
+            std::vector<std::string> f;
+            size_t start = 0;
+            for (;;) {
+                size_t tab = line.find('\t', start);
+                f.push_back(line.substr(start, tab == std::string::npos ? std::string::npos : tab - start));
+                if (tab == std::string::npos) break;
+                start = tab + 1;
+            }
+            DesignSet ds;
+            ds.name      = trim(f[0]);
+            ds.pin       = f.size() > 1 ? trim(f[1]) : "";
+            ds.activeLow = f.size() > 2 ? toBool(trim(f[2]), true) : true;
+            ds.pull      = f.size() > 3 ? trim(f[3]) : "gpio_pu";
+            if (ds.name.empty()) ds.name = "Set " + std::to_string(want.size() + 1);
+            want.push_back(ds);
+            if (want.size() >= 32) break;
+        }
+        if (want.empty()) {
+            DesignSet ds;
+            ds.name = "Designs";
+            ds.pin = mEnablePin;
+            ds.pull = mEnablePull;
+            ds.activeLow = mEnableLow;
+            want.push_back(ds);
+        }
+
+        // Carry the live input state and the remembered design across a reload
+        // so editing a set name does not re-trigger its switch.
+        for (size_t i = 0; i < want.size(); ++i) {
+            if (i < mSets.size()) {
+                want[i].in = mSets[i].in;
+                want[i].selectedKey = mSets[i].selectedKey;
+            }
+            auto it = mLoadedSel.find((int)i);
+            if (want[i].selectedKey.empty() && it != mLoadedSel.end())
+                want[i].selectedKey = it->second;
+        }
+        for (size_t i = want.size(); i < mSets.size(); ++i) mSets[i].in.release();
+        mSets.swap(want);
+
+        for (size_t i = 0; i < mMru.size();) {           // forget vanished sets
+            if (mMru[i] >= (int)mSets.size()) mMru.erase(mMru.begin() + i);
+            else ++i;
+        }
+        if (mActiveSet >= (int)mSets.size()) mActiveSet = -1;
+        rebuildSetOrder();
+    }
+
+    // Which designs belong to the set that is currently switched on, in order.
+    void rebuildSetOrder() {
+        mSetOrder.clear();
+        if (mActiveSet < 0) return;
+        for (size_t i = 0; i < mDesigns.size(); ++i)
+            if (mDesigns[i].set == mActiveSet) mSetOrder.push_back((int)i);
+    }
+
+    bool inMru(int i) const {
+        return std::find(mMru.begin(), mMru.end(), i) != mMru.end();
+    }
+    void mruRemove(int i) {
+        mMru.erase(std::remove(mMru.begin(), mMru.end(), i), mMru.end());
+    }
+    void mruTouch(int i) {                 // most recently switched on goes first
+        mruRemove(i);
+        mMru.insert(mMru.begin(), i);
     }
 
     // Resolve a remembered design, but never land on one the user has since
     // switched off - fall through to the first entry that is still enabled.
     int resolveStart() const {
-        int idx = indexOfKey(mSelectedKey);
-        if (idx >= 0 && mDesigns[idx].enabled) return idx;
+        if (mActiveSet < 0) return -1;
+        if (mResumeLast) {
+            int idx = indexOfKey(mSets[mActiveSet].selectedKey);
+            if (idx >= 0 && mDesigns[idx].enabled) return idx;
+        }
         return firstEnabled();
     }
 
+    // All of these work in terms of indexes into mDesigns, but only ever walk
+    // mSetOrder - the designs belonging to the set whose switch is on.
     int indexOfKey(const std::string& key) const {
         if (key.empty()) return -1;
-        for (size_t i = 0; i < mDesigns.size(); ++i)
-            if (mDesigns[i].key() == key) return (int)i;
+        for (int gi : mSetOrder)
+            if (mDesigns[gi].key() == key) return gi;
         return -1;
     }
     int firstEnabled() const {
-        for (size_t i = 0; i < mDesigns.size(); ++i)
-            if (mDesigns[i].enabled) return (int)i;
+        for (int gi : mSetOrder)
+            if (mDesigns[gi].enabled) return gi;
+        return -1;
+    }
+    int posInOrder(int designIdx) const {
+        for (size_t i = 0; i < mSetOrder.size(); ++i)
+            if (mSetOrder[i] == designIdx) return (int)i;
         return -1;
     }
     // Step `dir` places through the enabled entries, honouring the wrap setting.
     int stepIndex(int from, int dir) const {
-        int n = (int)mDesigns.size();
+        int n = (int)mSetOrder.size();
         if (n == 0) return -1;
+        int p = posInOrder(from);
+        int base = (p < 0) ? (dir > 0 ? -1 : 0) : p;
         for (int i = 1; i <= n; ++i) {
-            int c = from + dir * i;
+            int c = base + dir * i;
             if (c < 0 || c >= n) {
-                if (!mWrap) return from >= 0 && from < n && mDesigns[from].enabled ? from : firstEnabled();
+                if (!mWrap) {
+                    if (p >= 0 && mDesigns[mSetOrder[p]].enabled) return mSetOrder[p];
+                    return firstEnabled();
+                }
                 c = ((c % n) + n) % n;
             }
-            if (mDesigns[c].enabled) return c;
+            if (mDesigns[mSetOrder[c]].enabled) return mSetOrder[c];
         }
         return firstEnabled();
     }
 
     // ------------------------------------------------------------------- state
+    // Read before the sets exist, so park the selections and let loadSets apply
+    // them. "key" is the single-set format written by earlier versions.
     void loadState() {
         std::ifstream in(kStatePath.c_str());
         std::string line;
@@ -367,21 +488,33 @@ private:
             size_t sp = line.find(' ');
             if (sp == std::string::npos) continue;
             std::string k = line.substr(0, sp), v = trim(line.substr(sp + 1));
+            auto unpack = [](const std::string& x) {
+                size_t bar = x.find('|');            // "type|name" - no tab in the file
+                return bar == std::string::npos ? std::string() : x.substr(0, bar) + "\t" + x.substr(bar + 1);
+            };
             if (k == "key") {
-                // stored as "type|name" so a tab never has to survive the file
-                size_t bar = v.find('|');
-                if (bar != std::string::npos) mSelectedKey = v.substr(0, bar) + "\t" + v.substr(bar + 1);
+                std::string kk = unpack(v);
+                if (!kk.empty()) mLoadedSel[0] = kk;
+            } else if (k == "sel") {
+                size_t sp2 = v.find(' ');
+                if (sp2 == std::string::npos) continue;
+                int idx = (int)toLong(v.substr(0, sp2), -1);
+                std::string kk = unpack(trim(v.substr(sp2 + 1)));
+                if (idx >= 0 && !kk.empty()) mLoadedSel[idx] = kk;
             }
         }
     }
     void saveState() {
-        if (mSelectedKey.empty()) return;
-        std::string v = mSelectedKey;
-        size_t tab = v.find('\t');
-        if (tab != std::string::npos) v[tab] = '|';
         FILE* f = fopen(kStatePath.c_str(), "w");
         if (!f) return;
-        fprintf(f, "PIXELSELECT_STATE 1\nkey %s\n", v.c_str());
+        fprintf(f, "PIXELSELECT_STATE 2\n");
+        for (size_t i = 0; i < mSets.size(); ++i) {
+            if (mSets[i].selectedKey.empty()) continue;
+            std::string v = mSets[i].selectedKey;
+            size_t tab = v.find('\t');
+            if (tab != std::string::npos) v[tab] = '|';
+            fprintf(f, "sel %d %s\n", (int)i, v.c_str());
+        }
         fclose(f);
     }
 
@@ -448,7 +581,7 @@ private:
     void startCurrent() {
         if (mIndex < 0 || mIndex >= (int)mDesigns.size()) return;
         const Design& d = mDesigns[mIndex];
-        mSelectedKey = d.key();
+        if (mActiveSet >= 0) mSets[mActiveSet].selectedKey = d.key();
         saveState();
         fppdCommand("Start Playlist", { d.name, mRepeat ? "true" : "false", "false" });
         mLastStart = std::chrono::steady_clock::now();
@@ -523,25 +656,45 @@ private:
 
     // ------------------------------------------------------------------ inputs
     void configureInputs() {
-        std::string err;
-        mEnableIn.configure(mEnablePin, mEnablePull, mEnableLow, err);
-        if (!err.empty()) { mPinError = err; err.clear(); }
+        std::string err, firstErr;
+        for (auto& ds : mSets) {
+            ds.in.configure(ds.pin, ds.pull, ds.activeLow, err);
+            if (!err.empty() && firstErr.empty()) firstErr = err;
+            err.clear();
+        }
         mNextIn.configure(mNextPin, mNextPull, mNextLow, err);
-        if (!err.empty()) mPinError = err;
-        if (mEnableIn.valid && (mNextIn.valid || mNextPin.empty())) mPinError.clear();
+        if (!err.empty() && firstErr.empty()) firstErr = err;
+        mPinError = firstErr;
     }
 
-    // The switch decides whether we own playback. There must be an explicit
-    // reason to be active: either the configured pin is asserted, or the user
-    // turned the software override on. With no enable pin configured we stay
-    // OUT of the way - a plugin that seized playback the moment it was enabled
-    // would fight the scheduler on a device that has one.
-    bool enableAsserted() const {
-        if (!mPluginEnabled) return false;
-        if (mVirtualEnable) return true;
-        if (mEnablePin.empty()) return false;
-        if (!mEnableIn.valid) return false;
-        return mEnableIn.stable;
+    // Which set should be running. There must be an explicit reason to be
+    // active: a configured switch is closed, or the software override is on.
+    // With several switches closed at once the most recently closed one wins,
+    // and releasing it falls back to whichever other one is still closed - which
+    // is also exactly what a rotary selector needs.
+    int wantedSet() const {
+        if (!mPluginEnabled || mSets.empty()) return -1;
+        if (mVirtualEnable) {
+            int i = mVirtualSet;
+            if (i < 0 || i >= (int)mSets.size()) i = 0;
+            return i;
+        }
+        for (int i : mMru)
+            if (i >= 0 && i < (int)mSets.size() && mSets[i].in.valid && mSets[i].in.stable)
+                return i;
+        return -1;
+    }
+
+    // Keep the most-recently-closed list in step with the real switch levels.
+    // Done declaratively rather than on edges so a switch that is already closed
+    // at boot is picked up too.
+    void trackSwitches(std::chrono::steady_clock::time_point now) {
+        for (size_t i = 0; i < mSets.size(); ++i) {
+            mSets[i].in.sample(mDebounceMs, now);
+            bool asserted = mSets[i].in.valid && mSets[i].in.stable;
+            if (asserted && !inMru((int)i)) mruTouch((int)i);
+            else if (!asserted && inMru((int)i)) mruRemove((int)i);
+        }
     }
 
     void handleButtonEdge(bool nowDown, std::chrono::steady_clock::time_point now) {
@@ -600,15 +753,19 @@ private:
         size_t sp = line.find(' ');
         if (sp != std::string::npos) { verb = line.substr(0, sp); arg = trim(line.substr(sp + 1)); }
 
-        if (verb == "next")      { if (mActive) fireNext(); else { int i = stepIndex(mIndex, 1); if (i >= 0) { mIndex = i; mSelectedKey = mDesigns[i].key(); saveState(); } } }
-        else if (verb == "prev") { int i = stepIndex(mIndex, -1); if (i >= 0) { mIndex = i; mSelectedKey = mDesigns[i].key(); saveState(); if (mActive) startCurrent(); } }
+        if (verb == "next")      { if (mActive) fireNext(); }
+        else if (verb == "prev") { if (mActive) { int i = stepIndex(mIndex, -1); if (i >= 0) { mIndex = i; startCurrent(); } } }
         else if (verb == "select") {
+            // The UI sends an index into the whole design list. Picking one that
+            // belongs to a set that is not switched on just stages it for later.
             int i = (int)toLong(arg, -1);
             if (i >= 0 && i < (int)mDesigns.size()) {
-                mIndex = i;
-                mSelectedKey = mDesigns[i].key();
-                saveState();
-                if (mActive) startCurrent();
+                int sIdx = mDesigns[i].set;
+                if (sIdx >= 0 && sIdx < (int)mSets.size()) {
+                    mSets[sIdx].selectedKey = mDesigns[i].key();
+                    saveState();
+                }
+                if (sIdx == mActiveSet) { mIndex = i; startCurrent(); }
             }
         } else if (verb == "restart") { if (mActive) startCurrent(); }
         else if (verb == "stop")      { stopPlayback(); }
@@ -645,11 +802,40 @@ private:
         auto now = std::chrono::steady_clock::now();
         double ago = mLastEvent.time_since_epoch().count()
                      ? std::chrono::duration<double>(now - mLastEvent).count() : -1.0;
+        // The set the switches have chosen, plus every set's live pin state so
+        // the UI can show a lamp per switch.
+        std::string sets = "[";
+        for (size_t i = 0; i < mSets.size(); ++i) {
+            const DesignSet& ds = mSets[i];
+            int n = 0;
+            for (const auto& dd : mDesigns) if (dd.set == (int)i) n++;
+            char buf[512];
+            snprintf(buf, sizeof(buf),
+                     "%s{\"name\":\"%s\",\"pin\":\"%s\",\"configured\":%s,\"ok\":%s,\"on\":%s,\"designs\":%d}",
+                     i ? "," : "", jesc(ds.name).c_str(), jesc(ds.pin).c_str(),
+                     ds.pin.empty() ? "false" : "true",
+                     ds.in.valid ? "true" : "false",
+                     (ds.in.valid && ds.in.stable) ? "true" : "false", n);
+            sets += buf;
+        }
+        sets += "]";
+
+        // The hero lamp speaks for the switches as a group: configured if any
+        // set has a pin, ok only if every configured one actually resolved, and
+        // on when one of them has given us a set to play.
+        bool anyPin = false, allOk = true;
+        for (const auto& ds : mSets) {
+            if (ds.pin.empty()) continue;
+            anyPin = true;
+            if (!ds.in.valid) allOk = false;
+        }
+        const DesignSet* as = (mActiveSet >= 0 && mActiveSet < (int)mSets.size()) ? &mSets[mActiveSet] : nullptr;
         fprintf(f,
             "{\"live\":true,\"pluginEnabled\":%s,\"active\":%s,\"virtualEnable\":%s,"
+            "\"activeSet\":%d,\"activeSetName\":\"%s\",\"sets\":%s,"
             "\"switchConfigured\":%s,\"switchOk\":%s,\"switchOn\":%s,"
             "\"buttonConfigured\":%s,\"buttonOk\":%s,\"buttonDown\":%s,"
-            "\"index\":%d,\"count\":%d,\"label\":\"%s\",\"name\":\"%s\",\"type\":\"%s\","
+            "\"index\":%d,\"pos\":%d,\"count\":%d,\"totalDesigns\":%d,\"setCount\":%d,\"label\":\"%s\",\"name\":\"%s\",\"type\":\"%s\","
             "\"playing\":%s,\"repeat\":%s,\"wrap\":%s,\"pinError\":\"%s\","
             "\"takeover\":%s,\"heldByOther\":%s,\"reclaims\":%ld,"
             "\"handBack\":%s,\"handBackPending\":%s,\"handedBack\":%ld,"
@@ -657,13 +843,16 @@ private:
             mPluginEnabled ? "true" : "false",
             mActive ? "true" : "false",
             mVirtualEnable ? "true" : "false",
-            mEnablePin.empty() ? "false" : "true",
-            mEnableIn.valid ? "true" : "false",
-            enableAsserted() ? "true" : "false",
+            mActiveSet,
+            as ? jesc(as->name).c_str() : "",
+            sets.c_str(),
+            anyPin ? "true" : "false",
+            (anyPin && allOk) ? "true" : "false",
+            mActive ? "true" : "false",
             mNextPin.empty() ? "false" : "true",
             mNextIn.valid ? "true" : "false",
             mNextIn.stable ? "true" : "false",
-            mIndex, (int)mDesigns.size(),
+            mIndex, posInOrder(mIndex), (int)mSetOrder.size(), (int)mDesigns.size(), (int)mSets.size(),
             d ? jesc(d->label).c_str() : "",
             d ? jesc(d->name).c_str() : "",
             d ? d->type.c_str() : "",
@@ -696,23 +885,28 @@ private:
             if (tick % 100 == 0) {            // ~500 ms: config, list, pin setup
                 reloadSettings();
                 applySettings();
+                loadSets(false);
                 loadDesigns(false);
                 configureInputs();
                 writePins();
             }
             if (tick % 10 == 0) pollCommandFile();   // ~50 ms
 
-            // Sample both inputs every pass so debouncing is accurate.
-            mEnableIn.sample(mDebounceMs, now);
+            // Sample every input on every pass so debouncing is accurate.
+            trackSwitches(now);
             bool btnChanged = mNextIn.sample(mDebounceMs, now);
 
-            bool wantActive = enableAsserted();
-            if (wantActive != mActive) {
-                mActive = wantActive;
+            int wantSet = wantedSet();
+            if (wantSet != mActiveSet) {
+                mActiveSet = wantSet;
+                mActive = (mActiveSet >= 0);
+                rebuildSetOrder();
                 if (mActive) {
-                    mIndex = mResumeLast ? resolveStart() : firstEnabled();
+                    mIndex = resolveStart();
                     if (mIndex >= 0) startCurrent();
+                    else stopPlayback();          // this set has nothing to play
                 } else {
+                    mIndex = -1;
                     stopPlayback();
                 }
             }
@@ -797,15 +991,24 @@ private:
     bool mRepeat = true, mWrap = true, mResumeLast = true, mKeepPlaying = true;
     bool mTakeover = true, mHandBack = true;
 
+    int mVirtualSet = 0;            // which set the software override stands in for
+
     // --- runtime ---
     std::vector<Design> mDesigns;
     long long mDesignsStamp = -1;
+    std::vector<DesignSet> mSets;   // one per toggle switch
+    long long mSetsStamp = -1;
+    std::vector<int> mSetOrder;     // designs of the active set, in list order
+    std::vector<int> mMru;          // set indexes, most recently switched on first
+    int mActiveSet = -1;
+    std::map<int, std::string> mLoadedSel;   // per-set selection read at startup
+    std::string mLegacyPin, mLegacyPull;     // last single-switch settings seen
+    bool mLegacyLow = true;
     int mIndex = -1;
-    std::string mSelectedKey;
     bool mActive = false;
     std::string mPinError;
     bool mPinsWritten = false;
-    DebouncedInput mEnableIn, mNextIn;
+    DebouncedInput mNextIn;
     std::chrono::steady_clock::time_point mPressStart{}, mLastStart{}, mLostSince{},
                                           mLastEvent{}, mStart{}, mPlaylistAt{};
     std::string mPlaylistName;      // what fppd says is playing (playlist designs)
