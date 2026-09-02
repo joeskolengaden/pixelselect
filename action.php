@@ -80,6 +80,13 @@ if ($action === 'sets') {
     if (!is_array($list) || !count($list)) ps_out(false, array('error' => 'Need at least one switch'));
     if (count($list) > 32) ps_out(false, array('error' => 'Too many switches (32 max)'));
 
+    // A switch with no pin can never fire. One is tolerated (that is the state a
+    // fresh install starts in); several means something has gone wrong.
+    $pinless = 0;
+    foreach ($list as $s) { if (trim(isset($s['pin']) ? $s['pin'] : '') === '') $pinless++; }
+    if ($pinless > 1 || ($pinless === 1 && count($list) > 1))
+        ps_out(false, array('error' => 'Every switch past the first needs its own pin'));
+
     $seen = array();
     foreach ($list as $s) {
         $pin = isset($s['pin']) ? trim($s['pin']) : '';

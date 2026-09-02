@@ -505,7 +505,8 @@ $ps_cfg = ps_cfg_read();
              '<span class="led2' + cls + '" title="Live switch state"></span>' +
              '<div class="nm"><input type="text" value="' + esc(st.name) + '" data-sname="' + i + '" ' +
                'aria-label="Name for switch ' + (i+1) + '"></div>' +
-             '<span class="tiny" style="width:70px;text-align:right">' + n + (n === 1 ? ' design' : ' designs') + '</span>' +
+             (st.pin ? '<span class="tiny" style="width:70px;text-align:right">' + n + (n === 1 ? ' design' : ' designs') + '</span>'
+                     : '<span class="tag miss" title="This switch can never fire">no pin</span>') +
              '<select class="pinsel" data-spin="' + i + '">' + pinOptions(st.pin) + '</select>' +
              '<div class="acts">' +
                (SETS.length > 1 ? '<button class="danger" data-sdel="' + i + '" title="Remove">✕</button>'
@@ -551,6 +552,7 @@ $ps_cfg = ps_cfg_read();
     vs.innerHTML = SETS.map(function(st, i){ return '<option value="' + i + '">' + esc(st.name) + '</option>'; }).join('');
     vs.value = CFG.virtual_set || '0';
     $('ps-set-pin').innerHTML = pinOptions('');
+    $('ps-set-add').disabled = true;      // a switch with no pin can never fire
     renderWiring();
   }
 
@@ -759,6 +761,7 @@ $ps_cfg = ps_cfg_read();
   }
 
   $('ps-set-add').addEventListener('click', function(){
+    if (!$('ps-set-pin').value) { toast('Pick a pin for the new switch', true); return; }
     var nm = $('ps-set-name').value.trim() || ('Switch ' + (SETS.length + 1));
     SETS.push({name: nm, pin: $('ps-set-pin').value,
                active_low: $('ps-wire-low').value !== '0',
@@ -774,6 +777,7 @@ $ps_cfg = ps_cfg_read();
             label: name.replace(/\.fseq$/i, '')});
     saveDesigns();
   });
+  $('ps-set-pin').addEventListener('change', function(){ $('ps-set-add').disabled = !this.value; });
   $('ps-wire-low').addEventListener('change', applyWiring);
   $('ps-wire-pull').addEventListener('change', applyWiring);
   $('ps-btn-next').addEventListener('click', function(){ post('cmd', {cmd:'next'}, function(r){ if(!r.ok) toast(r.error||'Failed', true); }); });
