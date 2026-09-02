@@ -64,11 +64,16 @@ a lamp per pin that follows the real pin level:
 
 ## Several switches, one set each
 
-Each switch is a row in the **Switches** card: a name, its pin, and how it is
-wired. The lamp on the left follows the real pin level, so you can confirm the
-wiring before adding a single design.
+Each switch is one row: a name, how many designs it owns, and its pin. The
+pushbutton is the last row of the same list, because it is just another wired
+input. The lamp on the left of each row follows the real pin level, so you can
+confirm the wiring before adding a single design.
 
-![The Switches card: three named switches, each with a pin and a live lamp](docs/ui-switches.png)
+Polarity and the pull resistor are set once for everything, on the line below the
+list — in practice every switch on a panel is wired the same way, and repeating
+two dropdowns per row only made the page harder to read.
+
+![The Switches and button card: named switches with live lamps, the shared pushbutton, and one wiring line](docs/ui-switches.png)
 
 The rules when more than one is closed:
 
@@ -95,8 +100,10 @@ Either of the two things already on your device:
 | **Playlist** | an FPP playlist, built however you like | the whole playlist repeats |
 
 Every design belongs to one switch. With more than one switch the design list
-grows a tab per switch; the **Add design** row adds into the tab you are looking
-at, and the dropdown on each row moves a design to a different switch.
+grows a tab per switch; the **Add design** picker adds into the tab you are
+looking at, and the dropdown on each row moves a design to a different switch.
+One picker lists your sequences and playlists together — there is no file type to
+choose first.
 
 Mix both types in one set, rename each entry to something an audience would
 recognise, drag them into the order the button should walk, and switch entries
@@ -151,32 +158,23 @@ Raspberry Pi like `P1-11`. Two things to avoid:
 - **Any pin your cape uses for outputs.** On a 48-string BeagleBone cape that is
   most of the P8 header, which is why the P9 side is usually the free one.
 
-![The Pushbutton card: pin, polarity, pull resistor, debounce, software override](docs/ui-button.png)
-
 ## Settings
 
-### Switches
+### Switches &amp; button
 
 | Setting | Default | Notes |
 |---|---|---|
 | Name | — | Shown on the design tabs and on the status header. |
-| Toggle pin | — | A switch with no pin never becomes active, so an unconfigured plugin cannot fight a schedule. |
-| Closes to | Ground | Ground for a switch wired to GND, 3.3 V for the other polarity. |
-| Resistor | Internal pull-up | Match it to the wiring. |
+| Pin | — | A switch with no pin never becomes active, so an unconfigured plugin cannot fight a schedule. |
+| Everything is wired… | to ground, internal pull-up | Applies to every switch and the button at once. Set it to 3.3 V + pull-down for the other polarity, or "no internal resistor" if you fitted your own. |
+| Test without switches | off | Behave as if a switch were closed, and choose which one. For testing before anything is wired. |
 
-### Pushbutton
+### Options
 
-| Setting | Default | Notes |
-|---|---|---|
-| Next pin | — | The momentary pushbutton, shared by every switch. |
-| Closes to | Ground | As above. |
-| Resistor | Internal pull-up | As above. |
-| Debounce | 30 ms | How long an input must hold steady before it counts. Raise it if one press advances two designs. |
-| Software override | off | Behave as if a switch were closed, and choose which one. For testing before anything is wired. |
+Folded away by default, because the defaults are the right answer for almost
+everyone. The summary line on the header says what they currently add up to.
 
-### Behaviour
-
-![The Behaviour card](docs/ui-behaviour.png)
+![The Options section](docs/ui-options.png)
 
 | Setting | Default | Notes |
 |---|---|---|
@@ -186,7 +184,8 @@ Raspberry Pi like `P1-11`. Two things to avoid:
 | Keep it playing | on | If playback stops on its own, start the selected design again. |
 | Back to the schedule on release | on | When the switch opens, nudge FPP's scheduler so a schedule still inside its window resumes. See below. |
 | Override everything else | on | While the switch is on, take the player back from a schedule, a remote, or the FPP UI. See below. |
-| When the switch goes off | Stop immediately | Or finish the current item / the current loop. |
+| When every switch is open | Stop immediately | Or finish the current item / the current loop. |
+| Debounce | 30 ms | How long an input must hold steady before it counts. Raise it if one press advances two designs. |
 | Long press does | nothing | Set it and a short press acts on release instead, so the two can be told apart. |
 
 ## Priority: the switch wins
@@ -234,11 +233,11 @@ If nothing is scheduled for right now, the device correctly stays idle.
 You do not need the switches to set this up.
 
 1. Add your designs and pick your pins.
-2. Turn on **Software override** in Inputs — the plugin behaves as though the
-   switch were closed.
+2. Turn on **Test without switches** — the plugin behaves as though a switch
+   were closed.
 3. Pick which switch it stands in for, if you have more than one.
-4. Use **Next design ›**, **Restart** and **Stop** at the top of the page, or the
-   ▶ button on any row, as a virtual pushbutton.
+4. Use **Next design ›** and **Stop** at the top of the page, or the ▶ button on
+   any row, as a virtual pushbutton.
 5. Turn the override back off. Now wire the real switches and watch the lamps
    follow them.
 
