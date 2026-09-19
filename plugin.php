@@ -264,6 +264,7 @@ $ps_cfg = ps_cfg_read();
       <div class="addbar">
         <select id="ps-add-name"></select>
         <button id="ps-add-btn">Add design</button>
+        <button class="sec" id="ps-solid-btn" title="Create one looping .fseq per colour in media/sequences">+ Solid colours</button>
       </div>
       <div class="tiny" style="margin-top:10px">Drag to reorder — the button walks this list top to bottom.
       Click a name to rename it.</div>
@@ -374,7 +375,7 @@ $ps_cfg = ps_cfg_read();
 <script>
 (function(){
   var BASE = 'plugin.php?plugin=pixelselect&page=';
-  var D = [], SETS = [], PINS = [], SEQ = [], PL = [], CFG = {};
+  var D = [], SETS = [], PINS = [], SEQ = [], PL = [], CFG = {}, PALETTE = [];
   var curSet = 0, liveSets = [], saveTimer = null, dragFrom = -1;
   function $(id){ return document.getElementById(id); }
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){
@@ -747,7 +748,7 @@ $ps_cfg = ps_cfg_read();
     post('lists', {}, function(r){
       if (!r.ok){ toast('Could not load plugin data', true); return; }
       SEQ = r.sequences || []; PL = r.playlists || []; PINS = r.pins || [];
-      D = r.designs || []; SETS = r.sets || [];
+      D = r.designs || []; SETS = r.sets || []; PALETTE = r.palette || [];
       // A throw in here used to leave the page silently half-drawn, which is a
       // miserable thing to debug from a screenshot.
       try {
@@ -778,6 +779,17 @@ $ps_cfg = ps_cfg_read();
     saveDesigns();
   });
   $('ps-set-pin').addEventListener('change', function(){ $('ps-set-add').disabled = !this.value; });
+  $('ps-solid-btn').addEventListener('click', function(){
+    var names = (PALETTE || []).map(function(c){ return c.label; }).join(', ');
+    if (!confirm('Create ' + (PALETTE || []).length + ' solid-colour sequences in media/sequences?\n\n' +
+                 names + '\n\nEach is a 10 second loop. They then appear in the picker like any other sequence.')) return;
+    var b = $('ps-solid-btn'); b.disabled = true; b.textContent = 'Creating…';
+    post('solidcolors', {op: 'add'}, function(r){
+      b.disabled = false; b.textContent = '+ Solid colours';
+      if (r.ok) { toast('Added ' + r.done.length + ' colour sequences'); load(); }
+      else toast(r.error || 'Could not create them', true);
+    });
+  });
   $('ps-wire-low').addEventListener('change', applyWiring);
   $('ps-wire-pull').addEventListener('change', applyWiring);
   $('ps-btn-next').addEventListener('click', function(){ post('cmd', {cmd:'next'}, function(r){ if(!r.ok) toast(r.error||'Failed', true); }); });

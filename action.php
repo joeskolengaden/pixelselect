@@ -11,6 +11,7 @@
  */
 @header('Content-Type: application/json');
 require_once(dirname(__FILE__) . '/lib/common.php');
+require_once(dirname(__FILE__) . '/lib/solidcolors.php');
 
 function ps_out($ok, $extra = array()) {
     echo json_encode(array_merge(array('ok' => $ok), $extra));
@@ -25,6 +26,7 @@ if ($action === 'lists') {
         'playlists' => ps_available_playlists(),
         'pins'      => ps_pin_list(),
         'sets'      => ps_sets_read(),
+        'palette'   => ps_palette(),
         'config'    => ps_cfg_read(),
         'designs'   => ps_designs_read(),
     ));
@@ -73,6 +75,44 @@ if ($action === 'save') {
 
     if (!ps_cfg_write($cfg)) ps_out(false, array('error' => 'Could not write the settings file'));
     ps_out(true, array('config' => $cfg));
+}
+
+if ($action === 'solidcolors') {
+    // Generate (or delete) the built-in solid-colour sequences. They land in
+    // media/sequences like any other .fseq, so they simply appear in the design
+    // picker - nothing else in the plugin needs to know they are special.
+    require_once(dirname(__FILE__) . '/lib/solidcolors.php');
+    $op = isset($_POST['op']) && $_POST['op'] === 'remove' ? 'remove' : 'add';
+    $d = ps_dirs();
+    if (!is_dir($d['sequences']))
+        ps_out(false, array('error' => 'No sequences directory at ' . $d['sequences']));
+    if ($op === 'add' && !is_writable($d['sequences']))
+        ps_out(false, array('error' => 'Cannot write to ' . $d['sequences']));
+
+    $done = array(); $failed = array();
+    foreach (ps_palette() as $c) {
+        $path = $d['sequences'] . '/' . ps_solid_filename($c['label']);
+        if ($op === 'remove') {
+            if (!file_exists($path) || @unlink($path)) $done[] = $c['label'];
+            else $failed[] = $c['label'];
+        } else {
+            if (ps_write_solid_fseq($path, $c['rgb'])) $done[] = $c['label'];
+            else $failed[] = $c['label'];
+        }
+    }
+    if ($op === 'remove') {
+        // Drop any designs that pointed at a colour we just deleted.
+        $designs = ps_designs_read(false);
+        $keep = array();
+        foreach ($designs as $dd)
+            if (!($dd['type'] === 'sequence' && ps_is_solid($dd['name']))) $keep[] = $dd;
+        if (count($keep) !== count($designs)) ps_designs_write($keep);
+    }
+    ps_out(count($failed) === 0, array(
+        'op' => $op, 'done' => $done, 'failed' => $failed,
+        'compressed' => function_exists('gzcompress'),
+        'error' => count($failed) ? ('Could not ' . $op . ': ' . implode(', ', $failed)) : null,
+    ));
 }
 
 if ($action === 'sets') {

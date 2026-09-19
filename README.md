@@ -31,6 +31,7 @@ Verified end to end on a BeagleBone Green running FPP 5.4.1.
 - [How it behaves](#how-it-behaves)
 - [Several switches, one set each](#several-switches-one-set-each)
 - [What a design is](#what-a-design-is)
+- [Built-in solid colours](#built-in-solid-colours)
 - [Install](#install)
 - [Wiring](#wiring)
 - [Settings](#settings)
@@ -111,6 +112,42 @@ off without deleting them. An entry whose sequence or playlist is no longer on t
 badged **missing** rather than silently doing nothing when the button reaches it.
 
 ![The design list, with a tab per switch](docs/ui-designs.png)
+
+## Built-in solid colours
+
+A customer who just wants "make it all red" should not have to open xLights. The
+Designs card has a **+ Solid colours** button that writes twelve ready-made
+sequences into `media/sequences`, one file per colour, which then appear in the
+picker like anything else:
+
+| | | | |
+|---|---|---|---|
+| Red `255,0,0` | Orange `255,70,0` | Amber `255,130,0` | Yellow `255,220,0` |
+| Green `0,255,0` | Teal `0,200,120` | Cyan `0,255,255` | Blue `0,0,255` |
+| Purple `130,0,255` | Magenta `255,0,200` | Warm White `255,150,70` | Cool White `255,255,255` |
+
+Each is a 10 second loop and about **21 KB** — 260 KB for the full set.
+
+They are that small because a solid colour is the same bytes in every frame,
+which zlib crushes to almost nothing, and FPP reads zlib-compressed FSEQ v2
+natively. That is also what makes them **independent of your channel count**:
+rather than guessing how many channels a given show has — FPP has no single API
+that reports it, and guessing low would leave pixels dark — each file simply
+covers 524,286 channels (174,762 RGB pixels). Channels past the end of a show are
+ignored by FPP; channels short of it are not, so erring large is the safe
+direction, and compression means the extra costs nothing. One frame per
+compression block keeps the decode buffer to a single frame, so a BeagleBone
+never sees more than half a megabyte at a time.
+
+Colour order is applied by FPP's output driver, so the files hold canonical RGB
+and your per-string `colorOrder` still applies. Two caveats worth knowing:
+
+- They assume **RGB pixels (3 channels per node)**. RGBW strings are not handled.
+- **Cool White is every channel at full**, which draws roughly three times the
+  current of a single-colour fill. Check your power budget before running it
+  across a large display.
+
+The same button removes them again (and drops any designs that pointed at one).
 
 ## Install
 

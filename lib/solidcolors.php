@@ -1,0 +1,139 @@
+<?php
+/*
+ * Built-in solid-colour sequences.
+ *
+ * Writes one .fseq per colour into media/sequences so a customer can pick a
+ * plain colour from the design list without ever opening xLights.
+ *
+ * Why these files are tiny and channel-count-proof
+ * ------------------------------------------------
+ * A solid colour is the same bytes in every frame, which zlib crushes to almost
+ * nothing. FPP 5.4+ reads zlib-compressed FSEQ v2 (compression type 2), so
+ * rather than trying to guess each customer's channel count - FPP has no single
+ * API that reports it, and guessing low would leave pixels dark - we simply
+ * cover a generously large range. Channels past the end of a show are ignored
+ * by FPP; channels short of it are not, so erring large is the safe direction.
+ *
+ * One frame per compression block keeps the decompression buffer to a single
+ * frame, so RAM and CPU stay trivial on a BeagleBone no matter how large the
+ * covered range is.
+ *
+ * Format reference: fpp/docs/FSEQ_Sequence_File_Format.txt and
+ * fpp/src/fseq/FSEQFile.cpp (V2FSEQFile header parse).
+ */
+
+// Covers 174,762 RGB pixels. Well past any BBB/Pi build, and only ~512 KB per
+// frame before compression.
+define('PS_SOLID_CHANNELS', 524286);        // a multiple of 3
+define('PS_SOLID_STEP_MS',  250);           // byte-wide field in FSEQ, max 255
+define('PS_SOLID_FRAMES',   40);            // 40 x 250ms = exactly 10 seconds
+define('PS_SOLID_PREFIX',   'Colour - ');
+
+function ps_palette() {
+    return array(
+        array('id' => 'red',        'label' => 'Red',        'rgb' => array(255,   0,   0)),
+        array('id' => 'orange',     'label' => 'Orange',     'rgb' => array(255,  70,   0)),
+        array('id' => 'amber',      'label' => 'Amber',      'rgb' => array(255, 130,   0)),
+        array('id' => 'yellow',     'label' => 'Yellow',     'rgb' => array(255, 220,   0)),
+        array('id' => 'green',      'label' => 'Green',      'rgb' => array(  0, 255,   0)),
+        array('id' => 'teal',       'label' => 'Teal',       'rgb' => array(  0, 200, 120)),
+        array('id' => 'cyan',       'label' => 'Cyan',       'rgb' => array(  0, 255, 255)),
+        array('id' => 'blue',       'label' => 'Blue',       'rgb' => array(  0,   0, 255)),
+        array('id' => 'purple',     'label' => 'Purple',     'rgb' => array(130,   0, 255)),
+        array('id' => 'magenta',    'label' => 'Magenta',    'rgb' => array(255,   0, 200)),
+        array('id' => 'warmwhite',  'label' => 'Warm White', 'rgb' => array(255, 150,  70)),
+        array('id' => 'coolwhite',  'label' => 'Cool White', 'rgb' => array(255, 255, 255)),
+    );
+}
+
+function ps_solid_filename($label) { return PS_SOLID_PREFIX . $label . '.fseq'; }
+
+// True when a sequence name is one of ours, so the UI can tell them apart.
+function ps_is_solid($name) { return strpos($name, PS_SOLID_PREFIX) === 0; }
+
+/*
+ * Write one solid-colour FSEQ v2 file. Returns true on success.
+ *
+ * Layout (all little-endian):
+ *   0-3   "PSEQ"
+ *   4-5   offset to channel data = 32 + blocks*8
+ *   6,7   minor 0, major 2
+ *   8-9   fixed header length (32)
+ *   10-13 channels per frame
+ *   14-17 number of frames
+ *   18    step time in ms (single byte)
+ *   19    flags
+ *   20    low nibble = compression type, high nibble = block count bits 8-11
+ *   21    block count bits 0-7
+ *   22    sparse range count (0)
+ *   23    reserved
+ *   24-31 unique id
+ *   then  blocks*8 bytes of {uint32 firstFrame, uint32 compressedLength}
+ *   then  the block payloads, back to back
+ */
+function ps_write_solid_fseq($path, $rgb, $channels = PS_SOLID_CHANNELS,
+                             $frames = PS_SOLID_FRAMES, $stepMs = PS_SOLID_STEP_MS) {
+    $channels = max(3, (int)$channels);
+    $channels -= $channels % 3;                       // whole RGB nodes only
+    $frames   = max(1, (int)$frames);
+    $stepMs   = max(1, min(255, (int)$stepMs));       // the field is one byte
+
+    // One frame: the RGB triple repeated across every channel. FPP's output
+    // driver applies each string's colour order, so this stays canonical RGB.
+    $frame = str_repeat(chr($rgb[0]) . chr($rgb[1]) . chr($rgb[2]), intdiv($channels, 3));
+
+    $useZlib = function_exists('gzcompress');
+    if ($useZlib) {
+        // One frame per block: the decompression buffer is then a single frame.
+        $payloads = array();
+        $blob = gzcompress($frame, 6);                // zlib-wrapped, matches inflateInit()
+        if ($blob === false) {
+            $useZlib = false;
+        } else {
+            for ($i = 0; $i < $frames; $i++) $payloads[] = $blob;   // identical frames
+        }
+    }
+
+    if ($useZlib) {
+        $numBlocks = $frames;
+        $dataOffset = 32 + $numBlocks * 8;
+        $compType = 2;
+    } else {
+        // No zlib in this PHP: fall back to uncompressed, which means the file
+        // is channels*frames bytes, so keep the covered range modest.
+        $numBlocks = 0;
+        $dataOffset = 32;
+        $compType = 0;
+    }
+    if ($numBlocks > 4095) return false;              // 12-bit field
+
+    $h = str_repeat("\0", 32);
+    $put = function (&$s, $off, $bytes) { for ($i = 0; $i < strlen($bytes); $i++) $s[$off + $i] = $bytes[$i]; };
+    $put($h, 0,  'PSEQ');
+    $put($h, 4,  pack('v', $dataOffset));
+    $put($h, 6,  chr(0) . chr(2));                    // minor 0, major 2
+    $put($h, 8,  pack('v', 32));
+    $put($h, 10, pack('V', $channels));
+    $put($h, 14, pack('V', $frames));
+    $put($h, 18, chr($stepMs));
+    $put($h, 19, chr(0));
+    $put($h, 20, chr(($compType & 0x0F) | ((($numBlocks >> 8) & 0x0F) << 4)));
+    $put($h, 21, chr($numBlocks & 0xFF));
+    $put($h, 22, chr(0));                             // no sparse ranges
+    $put($h, 23, chr(0));
+    $put($h, 24, pack('V', 0x5053454C) . pack('V', time() & 0xFFFFFFFF));
+
+    $tmp = $path . '.tmp';
+    $f = @fopen($tmp, 'wb');
+    if (!$f) return false;
+    fwrite($f, $h);
+    if ($numBlocks) {
+        foreach ($payloads as $i => $blob) fwrite($f, pack('V', $i) . pack('V', strlen($blob)));
+        foreach ($payloads as $blob) fwrite($f, $blob);
+    } else {
+        for ($i = 0; $i < $frames; $i++) fwrite($f, $frame);
+    }
+    fclose($f);
+    @chmod($tmp, 0664);
+    return @rename($tmp, $path);
+}
