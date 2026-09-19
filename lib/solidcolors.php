@@ -121,7 +121,11 @@ function ps_write_solid_fseq($path, $rgb, $channels = PS_SOLID_CHANNELS,
     $put($h, 21, chr($numBlocks & 0xFF));
     $put($h, 22, chr(0));                             // no sparse ranges
     $put($h, 23, chr(0));
-    $put($h, 24, pack('V', 0x5053454C) . pack('V', time() & 0xFFFFFFFF));
+    // The unique id must differ per file: all twelve are written in the same
+    // second, so seeding it from the clock alone gave every colour an identical
+    // id, which FPP and xLights use to tell sequences apart.
+    $put($h, 24, pack('V', crc32(implode(',', $rgb) . '|' . $channels . '|' . $frames))
+               . pack('V', time() & 0xFFFFFFFF));
 
     $tmp = $path . '.tmp';
     $f = @fopen($tmp, 'wb');
