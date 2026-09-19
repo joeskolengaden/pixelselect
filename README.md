@@ -268,16 +268,21 @@ If nothing is scheduled for right now, the device correctly stays idle.
 
 ## Trying it without hardware
 
-You do not need the switches to set this up.
+Every input has a software trigger, so the whole thing can be driven from the
+page before a single wire is soldered.
 
 1. Add your designs and pick your pins.
-2. Turn on **Test without switches** — the plugin behaves as though a switch
-   were closed.
-3. Pick which switch it stands in for, if you have more than one.
-4. Use **Next design ›** and **Stop** at the top of the page, or the ▶ button on
-   any row, as a virtual pushbutton.
-5. Turn the override back off. Now wire the real switches and watch the lamps
-   follow them.
+2. Hit **Test** on any switch row. The plugin behaves exactly as though that
+   switch had been closed — same code path, not a simulation — and the button
+   reads **Testing** while it is held.
+3. Hit **Press** on the pushbutton row to advance within that switch's designs.
+   **Next design ›** and **Stop** at the top of the page, and the ▶ on any
+   design row, do the same job.
+4. Hit **Testing** again to release. Now wire the real switches and watch the
+   lamp on each row follow the pin.
+
+The triggers drive the same `virtual_enable` / `virtual_set` settings the plugin
+already honours, so what you test is what the hardware will do.
 
 ## How it works
 

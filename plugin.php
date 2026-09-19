@@ -130,6 +130,8 @@ $ps_cfg = ps_cfg_read();
   box-shadow:inset 0 0 0 1px rgba(0,0,0,.10);transition:.15s}
 #ps .d .led2.on{background:var(--ok);box-shadow:0 0 0 3px var(--ok2)}
 #ps .d .led2.err{background:var(--bad);box-shadow:0 0 0 3px var(--bad2)}
+#ps .d .tbtn{padding:4px 11px;font-size:12.5px;border-radius:8px}
+#ps .d .tbtn.on{background:var(--acc);color:#fff;border-color:transparent}
 #ps .d .pinsel{font-size:12.5px;padding:5px 8px;border-radius:8px;width:120px}
 #ps .d .setsel{font-size:12px;padding:4px 6px;border-radius:7px;max-width:130px}
 #ps .d.fixed{background:var(--bg2)}
@@ -248,9 +250,7 @@ $ps_cfg = ps_cfg_read();
           <option value="gpio">no internal resistor</option>
         </select>
         <span class="grow"></span>
-        <label class="sw" title="Act as if a switch were closed"><input type="checkbox" id="ps-virtual_enable"><span class="sl"></span></label>
-        <span>Test without switches</span>
-        <select id="ps-virtual_set" style="display:none"></select>
+        <span class="tiny">No switches wired yet? Use <b>Test</b> on any row.</span>
       </div>
     </div>
   </div>
@@ -497,6 +497,7 @@ $ps_cfg = ps_cfg_read();
   function renderSets(){
     var wrap = $('ps-sets');
     $('ps-scount').textContent = SETS.length > 1 ? (SETS.length + ' switches') : '';
+    var testing = (CFG.virtual_enable === '1') ? (+CFG.virtual_set || 0) : -1;
     var h = '';
     SETS.forEach(function(st, i){
       var live = liveSets[i] || {};
@@ -510,6 +511,8 @@ $ps_cfg = ps_cfg_read();
                      : '<span class="tag miss" title="This switch can never fire">no pin</span>') +
              '<select class="pinsel" data-spin="' + i + '">' + pinOptions(st.pin) + '</select>' +
              '<div class="acts">' +
+               '<button class="sec tbtn' + (testing === i ? ' on' : '') + '" data-test="' + i +
+                 '" title="Pretend this switch is closed">' + (testing === i ? 'Testing' : 'Test') + '</button>' +
                (SETS.length > 1 ? '<button class="danger" data-sdel="' + i + '" title="Remove">✕</button>'
                                 : '<span style="width:30px"></span>') +
              '</div>' +
@@ -521,7 +524,9 @@ $ps_cfg = ps_cfg_read();
            '<span class="led2' + (!CFG.next_pin ? '' : (bl.ok === false ? ' err' : (bl.down ? ' on' : ''))) + '"></span>' +
            '<div class="nm" style="font-weight:600;padding:3px 6px">Pushbutton <span class="tiny">— steps through the switch that is on</span></div>' +
            '<select class="pinsel" id="ps-next_pin">' + pinOptions(CFG.next_pin || '') + '</select>' +
-           '<div class="acts"><span style="width:30px"></span></div>' +
+           '<div class="acts">' +
+             '<button class="sec tbtn" id="ps-press" title="Pretend the button was pressed">Press</button>' +
+             '<span style="width:30px"></span></div>' +
          '</div>';
     wrap.innerHTML = h;
 
@@ -548,10 +553,27 @@ $ps_cfg = ps_cfg_read();
       });
     });
 
-    var vs = $('ps-virtual_set');
-    vs.style.display = SETS.length > 1 ? '' : 'none';
-    vs.innerHTML = SETS.map(function(st, i){ return '<option value="' + i + '">' + esc(st.name) + '</option>'; }).join('');
-    vs.value = CFG.virtual_set || '0';
+    // Software triggers: these drive the same virtual_enable / virtual_set the
+    // plugin already honours, so a test behaves exactly like the real switch.
+    wrap.querySelectorAll('[data-test]').forEach(function(e){
+      e.addEventListener('click', function(){
+        var i = +e.dataset.test;
+        var testingThis = (CFG.virtual_enable === '1') && ((+CFG.virtual_set || 0) === i);
+        var body = testingThis ? {virtual_enable: '0'} : {virtual_set: String(i), virtual_enable: '1'};
+        post('save', body, function(r){
+          if (!r.ok) { toast(r.error || 'Could not switch test mode', true); return; }
+          CFG = r.config;
+          toast(testingThis ? 'Test mode off' : 'Testing "' + SETS[i].name + '"');
+          renderSets();
+        });
+      });
+    });
+    $('ps-press').addEventListener('click', function(){
+      post('cmd', {cmd: 'next'}, function(r){
+        if (r.ok) toast('Button pressed');
+        else toast(r.error || 'Failed', true);
+      });
+    });
     $('ps-set-pin').innerHTML = pinOptions('');
     $('ps-set-add').disabled = true;      // a switch with no pin can never fire
     renderWiring();
@@ -682,11 +704,17 @@ $ps_cfg = ps_cfg_read();
   function banner(html, kind){
     $('ps-banner').innerHTML = html ? '<div class="banner ' + kind + '">' + html + '</div>' : '';
   }
-  function renderSetLamps(){
+  function renderSetLamps(s){
     document.querySelectorAll('#ps-sets .d[data-s]').forEach(function(row){
       var i = +row.dataset.s, live = liveSets[i] || {}, lamp = row.querySelector('.led2');
-      if (!lamp) return;
-      lamp.className = 'led2' + (!SETS[i] || !SETS[i].pin ? '' : (live.ok === false ? ' err' : (live.on ? ' on' : '')));
+      if (lamp)
+        lamp.className = 'led2' + (!SETS[i] || !SETS[i].pin ? '' : (live.ok === false ? ' err' : (live.on ? ' on' : '')));
+      var tb = row.querySelector('[data-test]');
+      if (tb && s) {
+        var on = !!s.virtualEnable && s.activeSet === i;
+        tb.classList.toggle('on', on);
+        tb.textContent = on ? 'Testing' : 'Test';
+      }
     });
     var brow = document.querySelector('#ps-sets .d.fixed .led2'), bl = liveSets.__btn || {};
     if (brow) brow.className = 'led2' + (!CFG.next_pin ? '' : (bl.ok === false ? ' err' : (bl.down ? ' on' : '')));
@@ -715,7 +743,7 @@ $ps_cfg = ps_cfg_read();
 
         if (s.sets) { liveSets = s.sets; }
         liveSets.__btn = {ok: s.buttonOk, down: s.buttonDown};
-        renderSetLamps();
+        renderSetLamps(s);
         window._psIndex = s.index;
 
         $('ps-title').textContent = (s.index >= 0 && s.label) ? s.label : (s.totalDesigns ? 'Nothing selected' : 'No designs');

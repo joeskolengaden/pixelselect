@@ -36,8 +36,11 @@ if ($action === 'save') {
     $cfg = ps_cfg_read();
     $bools = array('enabled', 'virtual_enable', 'enable_active_low', 'next_active_low',
                    'repeat', 'wrap', 'resume_last', 'keep_playing', 'takeover', 'hand_back');
+    // virtual_set must land on a switch that exists, not just inside the
+    // schema's 0-31 - a stored 31 with two switches is meaningless.
+    $maxSet = max(0, count(ps_sets_read()) - 1);
     $ints  = array('debounce_ms' => array(1, 1000), 'long_press_ms' => array(0, 10000),
-                   'virtual_set' => array(0, 31));
+                   'virtual_set' => array(0, $maxSet));
     $enums = array(
         'enable_pull'       => array('gpio', 'gpio_pu', 'gpio_pd'),
         'next_pull'         => array('gpio', 'gpio_pu', 'gpio_pd'),
