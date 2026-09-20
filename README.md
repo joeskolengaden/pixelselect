@@ -32,6 +32,7 @@ Verified end to end on a BeagleBone Green running FPP 5.4.1.
 - [Several switches, one set each](#several-switches-one-set-each)
 - [What a design is](#what-a-design-is)
 - [Built-in solid colours](#built-in-solid-colours)
+- [WLED-style patterns](#wled-style-patterns)
 - [Install](#install)
 - [Wiring](#wiring)
 - [Settings](#settings)
@@ -131,6 +132,10 @@ picker like anything else:
 
 Each is a 10 second loop and about **21 KB** — roughly 510 KB for the full set.
 
+The design list shows a **colour swatch** against every one of them, an animated
+gradient chip against each pattern, and a pulsing **playing** badge on whichever
+design is on air, so it is obvious at a glance what is selected.
+
 They are that small because a solid colour is the same bytes in every frame,
 which zlib crushes to almost nothing, and FPP reads zlib-compressed FSEQ v2
 natively. That is also what makes them **independent of your channel count**:
@@ -151,6 +156,42 @@ and your per-string `colorOrder` still applies. Two caveats worth knowing:
   across a large display.
 
 The same button removes them again (and drops any designs that pointed at one).
+
+## WLED-style patterns
+
+**+ WLED patterns** writes ten animated sequences modelled on WLED's familiar
+effects: Rainbow, Rainbow Cycle, Breathe, Colour Wipe, Theater Chase, Running
+Lights, Comet, Larson Scanner, Twinkle and Fire Flicker. Ten seconds each at
+20 fps.
+
+Unlike a solid colour, **a pattern has to know where your pixels are** — "chase
+down the string" is meaningless without a layout. So these are rendered against
+your actual output configuration: every virtual string on every port, including
+the `virtualStringsB/C/D` groups a port can carry, with the channels-per-node
+rule FPP itself uses (4 when `colorOrder` is four characters, otherwise 3, so
+RGBW strings get a zero white channel). **Regenerate them if you change your
+outputs** — the same button does it.
+
+They are built with whole-string operations rather than a per-pixel loop
+(rotations via `substr`, fills via `str_repeat`, sparkles via `substr_replace`),
+which is what keeps rendering all ten down to about a second on a BeagleBone
+instead of minutes.
+
+## Colour accuracy
+
+FPP corrects gamma at the output with a per-string lookup table,
+`f = maxB * pow(f/255, gamma)` — but only when that string's gamma is set, and
+it defaults to 1.0, meaning your bytes go out untouched. Raw 8-bit values sent
+that way look wrong: mid-tones read far brighter than the colour you asked for.
+
+So the generators encode gamma (2.2) into the files, but **only when every
+configured string is at gamma 1.0**. If you have set gamma on your strings, the
+files are left linear and FPP keeps doing the correction — applying both would
+compound and everything would come out too dark. Anything that cannot be read
+confidently is treated as "leave it to FPP".
+
+The palette values in this README are the colours you asked for; what is stored
+in the file is the perceptually encoded version of them.
 
 ## Install
 

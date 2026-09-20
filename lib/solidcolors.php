@@ -28,6 +28,9 @@ define('PS_SOLID_CHANNELS', 524286);        // a multiple of 3
 define('PS_SOLID_STEP_MS',  250);           // byte-wide field in FSEQ, max 255
 define('PS_SOLID_FRAMES',   40);            // 40 x 250ms = exactly 10 seconds
 define('PS_SOLID_PREFIX',   'Colour - ');
+// Perceptual encoding applied to the file ONLY when FPP is not already doing it
+// at the output. sRGB-ish; WLED uses 2.8, which is heavier handed.
+define('PS_SOLID_GAMMA',    2.2);
 
 function ps_palette() {
     return array(
@@ -62,6 +65,48 @@ function ps_palette() {
 
 function ps_solid_filename($label) { return PS_SOLID_PREFIX . $label . '.fseq'; }
 
+/*
+ * Should we encode gamma into the file?
+ *
+ * FPP corrects at the output with a per-string LUT, f = maxB * pow(f/255, gamma),
+ * but only if that string's gamma is set. Baking correction in as well would
+ * double-correct, so we only do it when every configured string is at gamma 1.0
+ * (i.e. FPP is passing our bytes straight through). Anything we cannot read
+ * confidently means we leave the data linear and let FPP own the correction.
+ *
+ * Note gamma is a STRING in the config and FPP parses it with atof(), where a
+ * missing/empty value becomes 0 and is then clamped to 0.01 - so "absent" is not
+ * the same as 1.0, and we must not assume it is.
+ */
+function ps_output_gamma_is_unity() {
+    $d = ps_dirs();
+    $seen = array();
+    foreach (array('co-bbbStrings.json', 'co-pixelStrings.json') as $f) {
+        $raw = @file_get_contents($d['config'] . '/' . $f);
+        if ($raw === false) continue;
+        $j = json_decode($raw, true);
+        if (!is_array($j)) continue;
+        foreach ($j['channelOutputs'] as $co) {
+            if (empty($co['enabled'])) continue;
+            foreach ((isset($co['outputs']) ? $co['outputs'] : array()) as $o) {
+                foreach ((isset($o['virtualStrings']) ? $o['virtualStrings'] : array()) as $v) {
+                    if (empty($v['pixelCount'])) continue;
+                    if (!isset($v['gamma']) || trim((string)$v['gamma']) === '') return false;  // unreadable
+                    $seen[(string)(float)$v['gamma']] = true;
+                }
+            }
+        }
+    }
+    if (!count($seen)) return false;                 // nothing to go on
+    return count($seen) === 1 && isset($seen['1']);  // every string at exactly 1.0
+}
+
+// Encode one 0-255 channel perceptually.
+function ps_gamma_encode($v, $g) {
+    if ($g <= 1.0) return $v;
+    return (int)round(255.0 * pow(max(0, min(255, $v)) / 255.0, $g));
+}
+
 // True when a sequence name is one of ours, so the UI can tell them apart.
 function ps_is_solid($name) { return strpos($name, PS_SOLID_PREFIX) === 0; }
 
@@ -86,7 +131,8 @@ function ps_is_solid($name) { return strpos($name, PS_SOLID_PREFIX) === 0; }
  *   then  the block payloads, back to back
  */
 function ps_write_solid_fseq($path, $rgb, $channels = PS_SOLID_CHANNELS,
-                             $frames = PS_SOLID_FRAMES, $stepMs = PS_SOLID_STEP_MS) {
+                             $frames = PS_SOLID_FRAMES, $stepMs = PS_SOLID_STEP_MS,
+                             $gamma = null) {
     $channels = max(3, (int)$channels);
     $channels -= $channels % 3;                       // whole RGB nodes only
     $frames   = max(1, (int)$frames);
@@ -94,7 +140,11 @@ function ps_write_solid_fseq($path, $rgb, $channels = PS_SOLID_CHANNELS,
 
     // One frame: the RGB triple repeated across every channel. FPP's output
     // driver applies each string's colour order, so this stays canonical RGB.
-    $frame = str_repeat(chr($rgb[0]) . chr($rgb[1]) . chr($rgb[2]), intdiv($channels, 3));
+    // $gamma encodes it perceptually when FPP is not correcting at the output.
+    $out = $rgb;
+    if ($gamma !== null && $gamma > 1.0)
+        for ($i = 0; $i < 3; $i++) $out[$i] = ps_gamma_encode($rgb[$i], $gamma);
+    $frame = str_repeat(chr($out[0]) . chr($out[1]) . chr($out[2]), intdiv($channels, 3));
 
     $useZlib = function_exists('gzcompress');
     if ($useZlib) {

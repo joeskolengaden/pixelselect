@@ -12,6 +12,7 @@
 @header('Content-Type: application/json');
 require_once(dirname(__FILE__) . '/lib/common.php');
 require_once(dirname(__FILE__) . '/lib/solidcolors.php');
+require_once(dirname(__FILE__) . '/lib/patterns.php');
 
 function ps_out($ok, $extra = array()) {
     echo json_encode(array_merge(array('ok' => $ok), $extra));
@@ -27,6 +28,8 @@ if ($action === 'lists') {
         'pins'      => ps_pin_list(),
         'sets'      => ps_sets_read(),
         'palette'   => ps_palette(),
+        'patterns'  => ps_pattern_list(),
+        'layout'    => ps_layout_summary(),
         'config'    => ps_cfg_read(),
         'designs'   => ps_designs_read(),
     ));
@@ -80,6 +83,47 @@ if ($action === 'save') {
     ps_out(true, array('config' => $cfg));
 }
 
+if ($action === 'patterns') {
+    // Animated patterns, unlike solid colours, are rendered against the real
+    // pixel layout - so they must be regenerated if the outputs are reconfigured.
+    $op = isset($_POST['op']) && $_POST['op'] === 'remove' ? 'remove' : 'add';
+    $d = ps_dirs();
+    if (!is_dir($d['sequences']))
+        ps_out(false, array('error' => 'No sequences directory at ' . $d['sequences']));
+
+    $L = ps_read_layout();
+    if ($op === 'add') {
+        if (!count($L['strings']))
+            ps_out(false, array('error' => 'No pixel strings are configured, so there is no layout to render a pattern against. Set up your outputs first.'));
+        if (!is_writable($d['sequences']))
+            ps_out(false, array('error' => 'Cannot write to ' . $d['sequences']));
+    }
+    $gamma = ps_output_gamma_is_unity() ? PS_PAT_GAMMA : null;
+
+    $done = array(); $failed = array();
+    foreach (ps_pattern_list() as $p) {
+        $path = $d['sequences'] . '/' . ps_pattern_filename($p['label']);
+        if ($op === 'remove') {
+            if (!file_exists($path) || @unlink($path)) $done[] = $p['label'];
+            else $failed[] = $p['label'];
+        } else {
+            if (ps_write_pattern_fseq($path, $p['id'], $L, $gamma)) $done[] = $p['label'];
+            else $failed[] = $p['label'];
+        }
+    }
+    if ($op === 'remove') {
+        $designs = ps_designs_read(false); $keep = array();
+        foreach ($designs as $dd)
+            if (!($dd['type'] === 'sequence' && ps_is_pattern($dd['name']))) $keep[] = $dd;
+        if (count($keep) !== count($designs)) ps_designs_write($keep);
+    }
+    ps_out(count($failed) === 0, array(
+        'op' => $op, 'done' => $done, 'failed' => $failed,
+        'gamma' => $gamma, 'layout' => ps_layout_summary($L),
+        'error' => count($failed) ? ('Could not ' . $op . ': ' . implode(', ', $failed)) : null,
+    ));
+}
+
 if ($action === 'solidcolors') {
     // Generate (or delete) the built-in solid-colour sequences. They land in
     // media/sequences like any other .fseq, so they simply appear in the design
@@ -92,6 +136,10 @@ if ($action === 'solidcolors') {
     if ($op === 'add' && !is_writable($d['sequences']))
         ps_out(false, array('error' => 'Cannot write to ' . $d['sequences']));
 
+    // Only encode gamma into the files when FPP is not correcting at the output,
+    // otherwise the two corrections compound and everything comes out too dark.
+    $gamma = ps_output_gamma_is_unity() ? PS_SOLID_GAMMA : null;
+
     $done = array(); $failed = array();
     foreach (ps_palette() as $c) {
         $path = $d['sequences'] . '/' . ps_solid_filename($c['label']);
@@ -99,7 +147,8 @@ if ($action === 'solidcolors') {
             if (!file_exists($path) || @unlink($path)) $done[] = $c['label'];
             else $failed[] = $c['label'];
         } else {
-            if (ps_write_solid_fseq($path, $c['rgb'])) $done[] = $c['label'];
+            if (ps_write_solid_fseq($path, $c['rgb'], PS_SOLID_CHANNELS, PS_SOLID_FRAMES,
+                                    PS_SOLID_STEP_MS, $gamma)) $done[] = $c['label'];
             else $failed[] = $c['label'];
         }
     }
@@ -114,6 +163,7 @@ if ($action === 'solidcolors') {
     ps_out(count($failed) === 0, array(
         'op' => $op, 'done' => $done, 'failed' => $failed,
         'compressed' => function_exists('gzcompress'),
+        'gamma' => $gamma,
         'error' => count($failed) ? ('Could not ' . $op . ': ' . implode(', ', $failed)) : null,
     ));
 }

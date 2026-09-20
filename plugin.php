@@ -109,7 +109,19 @@ $ps_cfg = ps_cfg_read();
 #ps .dl{display:flex;flex-direction:column;gap:8px}
 #ps .d{display:flex;align-items:center;gap:11px;padding:10px 12px;border:1px solid var(--line);
   border-radius:11px;background:var(--bg);transition:.12s}
-#ps .d.cur{border-color:var(--acc);background:var(--acc2)}
+#ps .d.cur{border-color:var(--acc);background:var(--acc2);box-shadow:0 0 0 1px var(--acc)}
+#ps .sw2{width:26px;height:26px;border-radius:7px;flex:none;border:1px solid rgba(0,0,0,.18);
+  box-shadow:inset 0 1px 2px rgba(255,255,255,.35)}
+#ps .sw2.pat{background:linear-gradient(135deg,#ff2d2d,#ffd12d,#3dff5c,#2de1ff,#4a5cff,#ff3df0)}
+#ps .sw2.none{background:repeating-linear-gradient(45deg,var(--line2),var(--line2) 4px,var(--bg) 4px,var(--bg) 8px)}
+#ps .nowtag{display:none;align-items:center;gap:5px;font-size:10.5px;font-weight:750;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--acc);background:var(--bg);border:1px solid var(--acc);
+  padding:3px 8px;border-radius:99px;flex:none}
+#ps .d.cur .nowtag{display:inline-flex}
+#ps .nowtag .pulse{width:7px;height:7px;border-radius:50%;background:var(--acc);animation:psPulse 1.2s ease-in-out infinite}
+@keyframes psPulse{0%,100%{opacity:1}50%{opacity:.25}}
+#ps .hero .swatch{width:34px;height:34px;border-radius:9px;border:1px solid rgba(0,0,0,.18);
+  display:none;flex:none;box-shadow:inset 0 1px 2px rgba(255,255,255,.35)}
 #ps .d.off{opacity:.55}
 #ps .d.dragover{border-style:dashed;border-color:var(--acc)}
 #ps .d .hnd{cursor:grab;color:var(--tx3);font-size:15px;line-height:1;user-select:none;padding:2px 3px}
@@ -214,7 +226,10 @@ $ps_cfg = ps_cfg_read();
   <div class="hero">
     <div class="now">
       <div class="eyebrow">Now playing</div>
-      <div class="title" id="ps-title">—</div>
+      <div style="display:flex;align-items:center;gap:11px">
+        <span class="swatch" id="ps-hero-swatch"></span>
+        <div class="title" id="ps-title">—</div>
+      </div>
       <div class="sub" id="ps-sub">Waiting for status from the plugin…</div>
       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
         <button class="sec" id="ps-btn-next">Next design ›</button>
@@ -265,6 +280,7 @@ $ps_cfg = ps_cfg_read();
         <select id="ps-add-name"></select>
         <button id="ps-add-btn">Add design</button>
         <button class="sec" id="ps-solid-btn" title="Create one looping .fseq per colour in media/sequences">+ Solid colours</button>
+        <button class="sec" id="ps-pat-btn" title="Create WLED-style animated patterns, rendered for your pixel layout">+ WLED patterns</button>
       </div>
       <div class="tiny" style="margin-top:10px">Drag to reorder — the button walks this list top to bottom.
       Click a name to rename it.</div>
@@ -375,7 +391,7 @@ $ps_cfg = ps_cfg_read();
 <script>
 (function(){
   var BASE = 'plugin.php?plugin=pixelselect&page=';
-  var D = [], SETS = [], PINS = [], SEQ = [], PL = [], CFG = {}, PALETTE = [];
+  var D = [], SETS = [], PINS = [], SEQ = [], PL = [], CFG = {}, PALETTE = [], PATTERNS = [], LAYOUT = '';
   var curSet = 0, liveSets = [], saveTimer = null, dragFrom = -1;
   function $(id){ return document.getElementById(id); }
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){
@@ -619,6 +635,10 @@ $ps_cfg = ps_cfg_read();
       h += '<div class="d' + (d.enabled ? '' : ' off') + '" data-i="' + i + '" draggable="true">' +
              '<span class="hnd" title="Drag to reorder">⣿</span>' +
              '<span class="idx">' + (pos+1) + '</span>' +
+             (function(){ var c = colourOf(d);
+                if (c) return '<span class="sw2" style="background:' + cssRgb(c) + '" title="' + cssRgb(c) + '"></span>';
+                if (/^Pattern - /.test(d.name || '')) return '<span class="sw2 pat" title="animated pattern"></span>';
+                return '<span class="sw2 none" title="not a solid colour"></span>'; })() +
              '<div class="mid">' +
                '<div class="lb"><input type="text" value="' + esc(d.label) + '" data-lab="' + i + '" ' +
                  'aria-label="Name for design ' + (pos+1) + '"></div>' +
@@ -628,6 +648,7 @@ $ps_cfg = ps_cfg_read();
                  (d.missing ? '<span class="tag miss">missing</span>' : '') +
                '</div>' +
              '</div>' +
+             '<span class="nowtag"><span class="pulse"></span>playing</span>' +
              '<div class="acts">' +
                (SETS.length > 1 ? '<select class="setsel" data-move="' + i + '" title="Move to another switch">' + setOpts + '</select>' : '') +
                '<button class="ghost" data-play="' + i + '" title="Play this now">▶</button>' +
@@ -681,6 +702,17 @@ $ps_cfg = ps_cfg_read();
       });
     });
   }
+
+  // A solid-colour design is named "Colour - <label>.fseq", so the palette the
+  // server sends tells us exactly what to paint the swatch.
+  function colourOf(d){
+    if (!d || d.type !== 'sequence') return null;
+    var m = /^Colour - (.+)\.fseq$/i.exec(d.name || '');
+    if (!m) return null;
+    var e = (PALETTE || []).filter(function(c){ return c.label === m[1]; })[0];
+    return e ? e.rgb : null;
+  }
+  function cssRgb(rgb){ return 'rgb(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ')'; }
 
   function markCurrent(){
     var cur = window._psIndex;
@@ -747,6 +779,10 @@ $ps_cfg = ps_cfg_read();
         window._psIndex = s.index;
 
         $('ps-title').textContent = (s.index >= 0 && s.label) ? s.label : (s.totalDesigns ? 'Nothing selected' : 'No designs');
+        var hs = $('ps-hero-swatch');
+        var hc = (s.index >= 0) ? colourOf({type: s.type, name: s.name}) : null;
+        if (hc) { hs.style.display = 'block'; hs.style.background = cssRgb(hc); hs.title = cssRgb(hc); }
+        else hs.style.display = 'none';
         var bits = [];
         if (!s.pluginEnabled) bits.push('plugin off');
         else if (!s.active) bits.push('waiting for a switch');
@@ -776,7 +812,7 @@ $ps_cfg = ps_cfg_read();
     post('lists', {}, function(r){
       if (!r.ok){ toast('Could not load plugin data', true); return; }
       SEQ = r.sequences || []; PL = r.playlists || []; PINS = r.pins || [];
-      D = r.designs || []; SETS = r.sets || []; PALETTE = r.palette || [];
+      D = r.designs || []; SETS = r.sets || []; PALETTE = r.palette || []; PATTERNS = r.patterns || []; LAYOUT = r.layout || '';
       // A throw in here used to leave the page silently half-drawn, which is a
       // miserable thing to debug from a screenshot.
       try {
@@ -815,6 +851,18 @@ $ps_cfg = ps_cfg_read();
     post('solidcolors', {op: 'add'}, function(r){
       b.disabled = false; b.textContent = '+ Solid colours';
       if (r.ok) { toast('Added ' + r.done.length + ' colour sequences'); load(); }
+      else toast(r.error || 'Could not create them', true);
+    });
+  });
+  $('ps-pat-btn').addEventListener('click', function(){
+    var names = (PATTERNS || []).map(function(p){ return p.label; }).join(', ');
+    if (!confirm('Create ' + (PATTERNS || []).length + ' animated patterns?\n\n' + names +
+                 '\n\nEach is a 10 second loop rendered for your pixel layout (' + LAYOUT + ').\n' +
+                 'Regenerate them if you change your outputs.')) return;
+    var b = $('ps-pat-btn'); b.disabled = true; b.textContent = 'Rendering…';
+    post('patterns', {op: 'add'}, function(r){
+      b.disabled = false; b.textContent = '+ WLED patterns';
+      if (r.ok) { toast('Added ' + r.done.length + ' patterns'); load(); }
       else toast(r.error || 'Could not create them', true);
     });
   });
