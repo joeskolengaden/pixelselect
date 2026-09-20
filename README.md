@@ -24,6 +24,8 @@ Verified end to end on a BeagleBone Green running FPP 5.4.1.
   <img alt="The PixelSelect settings page under Content Setup → Plugins" src="docs/screenshot.png">
 </picture>
 
+![How it works: switch and button into the plugin, the plugin into FPP's player, FPP into your pixels](docs/flow.png)
+
 ---
 
 ## Contents
@@ -76,6 +78,8 @@ list — in practice every switch on a panel is wired the same way, and repeatin
 two dropdowns per row only made the page harder to read.
 
 ![The Switches and button card: named switches with live lamps, the shared pushbutton, and one wiring line](docs/ui-switches.png)
+
+![Three switches, each owning its own list of designs; the button walks only the closed one](docs/sets.png)
 
 The rules when more than one is closed:
 
@@ -276,6 +280,8 @@ While any switch is closed, the plugin owns the player. Closing the switch
 interrupts whatever was running, and if anything else grabs the player afterwards
 — a scheduled playlist starting, a remote, someone pressing play on the FPP status
 page — the plugin takes it straight back.
+
+![Timeline: schedule plays, switch closes and the plugin takes over, the scheduler interferes and is reclaimed, switch opens and the schedule resumes](docs/priority.png)
 
 It checks twice a second but only acts after the player has been somewhere else
 for two seconds, with a three-second grace period after each of its own starts.

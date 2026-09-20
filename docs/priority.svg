@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 300" width="860" height="300" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+  <rect width="860" height="300" fill="#ffffff"/>
+  <text x="20" y="28" font-size="13" font-weight="700" fill="#0f172a">Who owns the player, over time</text>
+
+  <!-- lanes -->
+  <text x="20" y="79" font-size="11" font-weight="700" fill="#64748b">SCHEDULE</text>
+  <text x="20" y="139" font-size="11" font-weight="700" fill="#2563eb">PIXELSELECT</text>
+  <text x="20" y="199" font-size="11" font-weight="700" fill="#64748b">SWITCH</text>
+
+  <!-- schedule lane -->
+  <rect x="120" y="62" width="150" height="24" rx="6" fill="#e2e8f0"/>
+  <text x="195" y="79" text-anchor="middle" font-size="10.5" fill="#475569">New PlayList</text>
+  <rect x="352" y="62" width="60" height="24" rx="6" fill="#fde68a" stroke="#f59e0b"/>
+  <text x="382" y="79" text-anchor="middle" font-size="10" fill="#92400e">grabs</text>
+  <rect x="640" y="62" width="200" height="24" rx="6" fill="#e2e8f0"/>
+  <text x="740" y="79" text-anchor="middle" font-size="10.5" fill="#475569">New PlayList resumes</text>
+
+  <!-- plugin lane -->
+  <rect x="270" y="122" width="82" height="24" rx="6" fill="#dbeafe" stroke="#3b6ef0"/>
+  <text x="311" y="139" text-anchor="middle" font-size="10" fill="#1e40af">takes over</text>
+  <rect x="412" y="122" width="108" height="24" rx="6" fill="#dbeafe" stroke="#3b6ef0"/>
+  <text x="466" y="139" text-anchor="middle" font-size="10" fill="#1e40af">reclaims (2s)</text>
+  <rect x="520" y="122" width="100" height="24" rx="6" fill="#dbeafe" stroke="#3b6ef0"/>
+  <text x="570" y="139" text-anchor="middle" font-size="10" fill="#1e40af">holds it</text>
+
+  <!-- switch lane -->
+  <g stroke="#0f172a" stroke-width="2.5" fill="none">
+    <path d="M120 195 H268"/>
+    <path d="M272 171 H616"/>
+    <path d="M620 195 H840"/>
+    <path d="M268 195 L272 171" stroke="#17a06a"/>
+    <path d="M616 171 L620 195" stroke="#d4453e"/>
+  </g>
+  <text x="200" y="212" font-size="10" fill="#64748b">open</text>
+  <text x="430" y="165" font-size="10" fill="#17a06a" font-weight="700">closed</text>
+  <text x="730" y="212" font-size="10" fill="#64748b">open</text>
+
+  <!-- event markers -->
+  <g stroke="#94a3b8" stroke-dasharray="3 3" stroke-width="1">
+    <path d="M270 50 V230"/><path d="M412 50 V230"/><path d="M620 50 V230"/>
+  </g>
+  <text x="270" y="248" text-anchor="middle" font-size="10" fill="#0f172a" font-weight="600">switch closes</text>
+  <text x="412" y="248" text-anchor="middle" font-size="10" fill="#0f172a" font-weight="600">scheduler interferes</text>
+  <text x="620" y="248" text-anchor="middle" font-size="10" fill="#0f172a" font-weight="600">switch opens</text>
+
+  <text x="20" y="278" font-size="10.5" fill="#64748b">While a switch is closed the plugin wins, confirming over 2s so it never thrashes. On release it waits for the player to go idle,</text>
+  <text x="20" y="292" font-size="10.5" fill="#64748b">then nudges the scheduler &#8212; FPP will not resume a mid-window schedule on its own once something else has played.</text>
+</svg>

@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 300" width="860" height="300" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+  <rect width="860" height="300" fill="#ffffff"/>
+  <text x="20" y="28" font-size="13" font-weight="700" fill="#0f172a">Each switch owns its own set. The button walks whichever one is closed.</text>
+
+  <!-- switch 1 (closed) -->
+  <circle cx="40" cy="78" r="7" fill="#17a06a"/>
+  <text x="58" y="83" font-size="12" font-weight="700" fill="#0f172a">Christmas</text>
+  <text x="58" y="99" font-size="10" fill="#17a06a" font-weight="600">CLOSED</text>
+  <g>
+    <rect x="175" y="60" width="128" height="34" rx="8" fill="#eef2ff" stroke="#3b6ef0" stroke-width="2"/>
+    <rect x="186" y="69" width="16" height="16" rx="4" fill="#ef4444"/>
+    <text x="212" y="82" font-size="11.5" font-weight="600" fill="#0f172a">Snowfall</text>
+    <rect x="318" y="60" width="128" height="34" rx="8" fill="#f8fafc" stroke="#e3e8ef"/>
+    <rect x="329" y="69" width="16" height="16" rx="4" fill="#22c55e"/>
+    <text x="355" y="82" font-size="11.5" fill="#475569">Candy Cane</text>
+    <rect x="461" y="60" width="128" height="34" rx="8" fill="#f8fafc" stroke="#e3e8ef"/>
+    <rect x="472" y="69" width="16" height="16" rx="4" fill="url(#g)"/>
+    <text x="498" y="82" font-size="11.5" fill="#475569">Rainbow</text>
+  </g>
+  <text x="604" y="82" font-size="10.5" fill="#3b6ef0" font-weight="700">&#8592; playing</text>
+
+  <!-- switch 2 (open) -->
+  <circle cx="40" cy="160" r="7" fill="#cbd5e1"/>
+  <text x="58" y="165" font-size="12" font-weight="700" fill="#64748b">Halloween</text>
+  <text x="58" y="181" font-size="10" fill="#94a3b8" font-weight="600">OPEN</text>
+  <g opacity=".45">
+    <rect x="175" y="142" width="128" height="34" rx="8" fill="#f8fafc" stroke="#e3e8ef"/>
+    <rect x="186" y="151" width="16" height="16" rx="4" fill="#f97316"/>
+    <text x="212" y="164" font-size="11.5" fill="#475569">Pumpkin</text>
+    <rect x="318" y="142" width="128" height="34" rx="8" fill="#f8fafc" stroke="#e3e8ef"/>
+    <rect x="329" y="151" width="16" height="16" rx="4" fill="#a855f7"/>
+    <text x="355" y="164" font-size="11.5" fill="#475569">Spooky</text>
+  </g>
+
+  <!-- switch 3 (open) -->
+  <circle cx="40" cy="232" r="7" fill="#cbd5e1"/>
+  <text x="58" y="237" font-size="12" font-weight="700" fill="#64748b">Quiet</text>
+  <text x="58" y="253" font-size="10" fill="#94a3b8" font-weight="600">OPEN</text>
+  <g opacity=".45">
+    <rect x="175" y="214" width="128" height="34" rx="8" fill="#f8fafc" stroke="#e3e8ef"/>
+    <rect x="186" y="223" width="16" height="16" rx="4" fill="#fde68a"/>
+    <text x="212" y="236" font-size="11.5" fill="#475569">Warm White</text>
+  </g>
+
+  <!-- button + arrow walking the active set -->
+  <rect x="640" y="132" width="196" height="120" rx="12" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="738" y="158" text-anchor="middle" font-size="12" font-weight="700" fill="#2563eb">pushbutton</text>
+  <text x="738" y="180" text-anchor="middle" font-size="10.5" fill="#475569">one press &#8594; next design</text>
+  <text x="738" y="198" text-anchor="middle" font-size="10.5" fill="#475569">in the CLOSED switch&#8217;s set</text>
+  <text x="738" y="222" text-anchor="middle" font-size="10.5" fill="#475569">wraps at the end</text>
+  <text x="738" y="240" text-anchor="middle" font-size="10.5" fill="#475569">never crosses into another</text>
+
+  <g stroke="#3b6ef0" stroke-width="2" fill="none" marker-end="url(#b)" stroke-dasharray="5 4">
+    <path d="M660 140 C600 110 560 96 596 82"/>
+  </g>
+  <g stroke="#3b6ef0" stroke-width="2" fill="none" marker-end="url(#b)">
+    <path d="M303 77 H314"/><path d="M446 77 H457"/>
+  </g>
+  <defs>
+    <marker id="b" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+      <path d="M0 0 L7 3.2 L0 6.4 z" fill="#3b6ef0"/></marker>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff2d2d"/><stop offset=".3" stop-color="#ffd12d"/>
+      <stop offset=".6" stop-color="#2de1ff"/><stop offset="1" stop-color="#ff3df0"/></linearGradient>
+  </defs>
+  <text x="20" y="288" font-size="10.5" fill="#64748b">Close a second switch and it takes over immediately; open it again and the plugin falls back to whichever is still closed.</text>
+</svg>

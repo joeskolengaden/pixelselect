@@ -222,6 +222,11 @@ if ($action === 'designs') {
         $type = (isset($d['type']) && $d['type'] === 'playlist') ? 'playlist' : 'sequence';
         $name = ps_clean($d['name']);
         if ($name === '') continue;
+        // The name is handed to fppd as a playlist/sequence name, never used as a
+        // path - but there is no legitimate reason for one to contain a path
+        // separator, so refuse rather than store something that shape.
+        if (preg_match('#[/\\\\]#', $name))
+            ps_out(false, array('error' => 'A design name cannot contain a path separator: ' . $name));
         // Reject anything that is not actually on this device - a stale name would
         // just make the button appear to do nothing.
         $known = ($type === 'playlist') ? in_array($name, $pls, true) : in_array($name, $seqs, true);

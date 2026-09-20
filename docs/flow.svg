@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 260" width="860" height="260" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+  <rect width="860" height="260" fill="#ffffff"/>
+  <text x="20" y="28" font-size="13" font-weight="700" fill="#0f172a">What happens when someone uses it</text>
+
+  <!-- switch -->
+  <rect x="20" y="52" width="150" height="86" rx="10" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.5"/>
+  <text x="95" y="76" text-anchor="middle" font-size="12" font-weight="700" fill="#2563eb">toggle switch</text>
+  <g stroke="#334155" stroke-width="2" fill="#ffffff">
+    <circle cx="58" cy="108" r="4.5"/><circle cx="132" cy="108" r="4.5"/>
+    <path d="M62 105 L128 92" stroke-linecap="round"/>
+  </g>
+  <text x="95" y="130" text-anchor="middle" font-size="10.5" fill="#64748b">closed = plugin owns the show</text>
+
+  <!-- button -->
+  <rect x="20" y="152" width="150" height="80" rx="10" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.5"/>
+  <text x="95" y="176" text-anchor="middle" font-size="12" font-weight="700" fill="#2563eb">pushbutton</text>
+  <rect x="78" y="188" width="34" height="10" rx="3" fill="#2563eb"/>
+  <g stroke="#334155" stroke-width="2" fill="none" stroke-linecap="round">
+    <path d="M95 198 V206"/><path d="M62 206 H128"/>
+  </g>
+  <text x="95" y="224" text-anchor="middle" font-size="10.5" fill="#64748b">next design in that set</text>
+
+  <!-- plugin -->
+  <rect x="235" y="72" width="185" height="140" rx="12" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="327" y="96" text-anchor="middle" font-size="12.5" font-weight="700" fill="#0f172a">PixelSelect</text>
+  <text x="327" y="118" text-anchor="middle" font-size="10.5" fill="#475569">samples both pins</text>
+  <text x="327" y="134" text-anchor="middle" font-size="10.5" fill="#475569">every 5 ms, debounced</text>
+  <text x="327" y="156" text-anchor="middle" font-size="10.5" fill="#475569">picks the design</text>
+  <text x="327" y="172" text-anchor="middle" font-size="10.5" fill="#475569">and holds the player</text>
+  <text x="327" y="196" text-anchor="middle" font-size="10" fill="#94a3b8">libpixelselect.so</text>
+
+  <!-- fpp -->
+  <rect x="485" y="72" width="165" height="140" rx="12" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="567" y="96" text-anchor="middle" font-size="12.5" font-weight="700" fill="#0f172a">FPP player</text>
+  <text x="567" y="120" text-anchor="middle" font-size="10.5" fill="#475569">Start Playlist</text>
+  <text x="567" y="136" text-anchor="middle" font-size="10.5" fill="#475569">&#8220;Colour - Red.fseq&#8221;</text>
+  <text x="567" y="162" text-anchor="middle" font-size="10.5" fill="#475569">loops it, applies</text>
+  <text x="567" y="178" text-anchor="middle" font-size="10.5" fill="#475569">colour order + gamma</text>
+
+  <!-- lights -->
+  <rect x="715" y="72" width="125" height="140" rx="12" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5"/>
+  <text x="777" y="96" text-anchor="middle" font-size="12.5" font-weight="700" fill="#c2410c">your pixels</text>
+  <g>
+    <circle cx="735" cy="130" r="8" fill="#ef4444"/><circle cx="759" cy="130" r="8" fill="#f59e0b"/>
+    <circle cx="783" cy="130" r="8" fill="#22c55e"/><circle cx="807" cy="130" r="8" fill="#3b82f6"/>
+    <circle cx="735" cy="158" r="8" fill="#a855f7"/><circle cx="759" cy="158" r="8" fill="#ec4899"/>
+    <circle cx="783" cy="158" r="8" fill="#06b6d4"/><circle cx="807" cy="158" r="8" fill="#eab308"/>
+  </g>
+  <text x="777" y="190" text-anchor="middle" font-size="10.5" fill="#9a3412">RGB, 8 bit each</text>
+
+  <!-- arrows -->
+  <g stroke="#334155" stroke-width="2" fill="none" marker-end="url(#a)">
+    <path d="M170 95 H228"/>
+    <path d="M170 192 H210 V150 H228"/>
+    <path d="M420 142 H478"/>
+    <path d="M650 142 H708"/>
+  </g>
+  <defs><marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+    <path d="M0 0 L7 3.2 L0 6.4 z" fill="#334155"/></marker></defs>
+
+  <text x="430" y="242" text-anchor="middle" font-size="10.5" fill="#64748b">Open every switch and the plugin lets go &#8212; FPP&#8217;s schedule takes back over.</text>
+</svg>
