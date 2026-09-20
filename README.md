@@ -116,7 +116,7 @@ badged **missing** rather than silently doing nothing when the button reaches it
 ## Built-in solid colours
 
 A customer who just wants "make it all red" should not have to open xLights. The
-Designs card has a **+ Solid colours** button that writes twelve ready-made
+Designs card has a **+ Solid colours** button that writes 24 ready-made
 sequences into `media/sequences`, one file per colour, which then appear in the
 picker like anything else:
 
@@ -125,8 +125,11 @@ picker like anything else:
 | Red `255,0,0` | Orange `255,70,0` | Amber `255,130,0` | Yellow `255,220,0` |
 | Green `0,255,0` | Teal `0,200,120` | Cyan `0,255,255` | Blue `0,0,255` |
 | Purple `130,0,255` | Magenta `255,0,200` | Warm White `255,150,70` | Cool White `255,255,255` |
+| Pink `255,60,140` | Rose `255,20,70` | Coral `255,90,80` | Lime `140,255,0` |
+| Mint `0,255,160` | Sky Blue `0,140,255` | Indigo `60,0,255` | Lavender `170,120,255` |
+| Ice White `200,230,255` | Cream `255,220,160` | Deep Red `140,0,0` | Forest `0,120,40` |
 
-Each is a 10 second loop and about **21 KB** — 260 KB for the full set.
+Each is a 10 second loop and about **21 KB** — roughly 510 KB for the full set.
 
 They are that small because a solid colour is the same bytes in every frame,
 which zlib crushes to almost nothing, and FPP reads zlib-compressed FSEQ v2

@@ -43,6 +43,20 @@ function ps_palette() {
         array('id' => 'magenta',    'label' => 'Magenta',    'rgb' => array(255,   0, 200)),
         array('id' => 'warmwhite',  'label' => 'Warm White', 'rgb' => array(255, 150,  70)),
         array('id' => 'coolwhite',  'label' => 'Cool White', 'rgb' => array(255, 255, 255)),
+        // Second wave. Existing entries above are untouched so designs that
+        // already point at those files keep working.
+        array('id' => 'pink',       'label' => 'Pink',       'rgb' => array(255,  60, 140)),
+        array('id' => 'rose',       'label' => 'Rose',       'rgb' => array(255,  20,  70)),
+        array('id' => 'coral',      'label' => 'Coral',      'rgb' => array(255,  90,  80)),
+        array('id' => 'lime',       'label' => 'Lime',       'rgb' => array(140, 255,   0)),
+        array('id' => 'mint',       'label' => 'Mint',       'rgb' => array(  0, 255, 160)),
+        array('id' => 'skyblue',    'label' => 'Sky Blue',   'rgb' => array(  0, 140, 255)),
+        array('id' => 'indigo',     'label' => 'Indigo',     'rgb' => array( 60,   0, 255)),
+        array('id' => 'lavender',   'label' => 'Lavender',   'rgb' => array(170, 120, 255)),
+        array('id' => 'icewhite',   'label' => 'Ice White',  'rgb' => array(200, 230, 255)),
+        array('id' => 'cream',      'label' => 'Cream',      'rgb' => array(255, 220, 160)),
+        array('id' => 'deepred',    'label' => 'Deep Red',   'rgb' => array(140,   0,   0)),
+        array('id' => 'forest',     'label' => 'Forest',     'rgb' => array(  0, 120,  40)),
     );
 }
 
