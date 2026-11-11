@@ -758,8 +758,32 @@ $ps_cfg = ps_cfg_read();
         var live = $('ps-live');
         if (!s.live){
           live.className = 'pill bad'; live.innerHTML = '<span class="dot"></span>not running';
-          banner('<span><b>The plugin is not loaded.</b> Restart FPP after installing — until then the '
-               + 'switches do nothing and this page cannot show live pin state.</span>', 'bad');
+          // Three different causes need three different fixes; saying "restart
+          // FPP" when the build failed just sends people round in circles.
+          var d = s.diag || {}, msg;
+          var ago = function(sec){
+            if (sec == null) return '';
+            if (sec < 90) return sec + ' seconds ago';
+            if (sec < 5400) return Math.round(sec/60) + ' minutes ago';
+            if (sec < 172800) return Math.round(sec/3600) + ' hours ago';
+            return Math.round(sec/86400) + ' days ago';
+          };
+          if (d.built === false)
+            msg = '<span><b>The plugin was never compiled</b> — there is no libpixelselect.so. '
+                + 'Restarting will not help. Go to <b>Content Setup → Plugins</b> and press '
+                + '<b>Update</b> on PixelSelect to rebuild it, and read the output: a compile '
+                + 'error there is the real problem.</span>';
+          else if (d.fppd === false)
+            msg = '<span><b>fppd is not running.</b> The plugin is built, but FPP\'s player is '
+                + 'stopped, so nothing can load it. Start FPP from the status page.</span>';
+          else if (d.built)
+            msg = '<span><b>Built ' + ago(d.builtAgo) + ', but fppd has not loaded it.</b> '
+                + 'fppd is running and was started before the build, so it is still using the old '
+                + 'code (or none). <b>Restart FPP</b> and this banner should clear.</span>';
+          else
+            msg = '<span><b>The plugin is not loaded.</b> Restart FPP after installing — until '
+                + 'then the switches do nothing and this page cannot show live pin state.</span>';
+          banner(msg, 'bad');
           $('ps-title').textContent = '—';
           $('ps-sub').textContent = 'No live data from fppd.';
           ['sw','bt'].forEach(function(x){ $('ps-lamp-'+x).className = 'lamp'; $('ps-'+x+'-v').textContent = '—'; });

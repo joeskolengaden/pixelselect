@@ -223,6 +223,27 @@ function ps_available_playlists() {
 
 /* ------------------------------------------------------------------- status */
 
+/*
+ * Why is the plugin not live?
+ *
+ * "live" only means the running plugin has published its status snapshot. When
+ * it has not, there are three quite different causes needing three different
+ * fixes, so work out which one it is instead of always saying "restart FPP" -
+ * that advice is simply wrong when the build failed.
+ */
+function ps_diag() {
+    $so = dirname(dirname(__FILE__)) . '/libpixelselect.so';   // .../plugins/pixelselect/
+    $built = file_exists($so);
+    // fppd answers on 32322 whether or not it has loaded us.
+    $ctx = stream_context_create(array('http' => array('timeout' => 2)));
+    $fppd = @file_get_contents('http://127.0.0.1:32322/fppd/status', false, $ctx);
+    return array(
+        'built'    => $built,
+        'builtAgo' => $built ? max(0, time() - filemtime($so)) : null,
+        'fppd'     => ($fppd !== false && $fppd !== ''),
+    );
+}
+
 function ps_status() {
     $s = @file_get_contents(ps_status_path());
     $j = $s ? json_decode($s, true) : null;
@@ -231,7 +252,8 @@ function ps_status() {
         $j = array('live' => false, 'pluginEnabled' => false, 'active' => false,
                    'index' => -1, 'count' => count(ps_designs_read()),
                    'label' => '', 'name' => '', 'type' => '', 'playing' => false,
-                   'switchOn' => false, 'buttonDown' => false, 'pinError' => '');
+                   'switchOn' => false, 'buttonDown' => false, 'pinError' => '',
+                     'diag' => ps_diag());
     }
     return $j;
 }
