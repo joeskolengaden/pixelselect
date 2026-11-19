@@ -50,6 +50,43 @@ function ps_pattern_filename($label, $colourLabel = '') {
 }
 function ps_is_pattern($name) { return strpos($name, PS_PAT_PREFIX) === 0; }
 
+/*
+ * The inverse of ps_pattern_filename(): turn "Pattern - Comet (Red+Green).fseq"
+ * back into the effect id and the rgb list, so an existing file can be rendered
+ * again against a changed layout without the user telling us what it was.
+ * Returns null if the name is not one of ours, or names something we no longer
+ * have (an effect or a colour that has since been renamed).
+ */
+function ps_pattern_parse($filename) {
+    if (!ps_is_pattern($filename)) return null;
+    $stem = substr($filename, strlen(PS_PAT_PREFIX));
+    if (substr($stem, -5) === '.fseq') $stem = substr($stem, 0, -5);
+    $colourLabel = '';
+    if (preg_match('/^(.*?)\s*\(([^()]*)\)$/', $stem, $m)) {
+        $stem = $m[1];
+        $colourLabel = $m[2];
+    }
+    $id = null;
+    foreach (ps_pattern_list() as $p) if ($p['label'] === $stem) { $id = $p['id']; $label = $p['label']; }
+    if ($id === null) return null;
+
+    $cols = array(); $names = array();
+    if ($colourLabel !== '') {
+        if (!function_exists('ps_palette')) return null;
+        $byLabel = array();
+        foreach (ps_palette() as $c) $byLabel[$c['label']] = $c['rgb'];
+        foreach (explode('+', $colourLabel) as $cl) {
+            $cl = trim($cl);
+            if (!isset($byLabel[$cl])) return null;      // colour we no longer know
+            $cols[] = $byLabel[$cl];
+            $names[] = $cl;
+        }
+    }
+    return array('id' => $id, 'label' => $label,
+                 'colours' => count($cols) ? $cols : null,
+                 'colourLabel' => implode('+', $names));
+}
+
 /* hue 0..1 -> rgb bytes, full saturation and value */
 function ps_hsv($h) {
     $h = $h - floor($h);
@@ -273,7 +310,11 @@ function ps_gamma_map($g) {
  */
 function ps_write_pattern_fseq($path, $id, $layout, $gamma = null, $colours = null) {
     if (!count($layout['strings'])) return false;
-    $n = $layout['pixels'];
+    // Render only as much strip as is actually visible. Using the LED total here
+    // would stretch the effect across pixels that no port ever shows, so a comet's
+    // tail came out several times too long on a cape with cloned ports.
+    $n = isset($layout['stripPixels']) && $layout['stripPixels'] > 0
+         ? (int)$layout['stripPixels'] : (int)$layout['pixels'];
     $strips = ps_pattern_strip_frames($id, $n, PS_PAT_FRAMES, $colours, PS_PAT_CYCLES);
     if (!$strips) return false;
 
@@ -286,10 +327,11 @@ function ps_write_pattern_fseq($path, $id, $layout, $gamma = null, $colours = nu
     foreach ($strips as $strip) {
         if ($useGamma) $strip = strtr($strip, $gFrom, $gTo);
         $frame = $blank;
-        $take = 0;
         foreach ($layout['strings'] as $s) {
-            $slice = substr($strip, $take * 3, $s['pixels'] * 3);
-            $take += $s['pixels'];
+            $off   = isset($s['offset']) ? (int)$s['offset'] : 0;
+            $slice = substr($strip, $off * 3, $s['pixels'] * 3);
+            if (strlen($slice) < $s['pixels'] * 3)        // string runs past the strip
+                $slice .= str_repeat("\0", $s['pixels'] * 3 - strlen($slice));
             if ($s['cpn'] === 4) {                       // insert a zero white channel
                 $wide = '';
                 for ($p = 0; $p < $s['pixels']; $p++) $wide .= substr($slice, $p * 3, 3) . "\0";

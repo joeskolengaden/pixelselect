@@ -94,13 +94,14 @@ if ($action === 'patterns') {
     //                       (absent = each effect's built-in look, as before)
     // Colour variants are separate files - "Pattern - Comet (Red).fseq" - so a
     // customer can be given the same chase in several colours to pick between.
-    $op = isset($_POST['op']) && $_POST['op'] === 'remove' ? 'remove' : 'add';
+    $op = isset($_POST['op']) ? $_POST['op'] : 'add';
+    if (!in_array($op, array('add', 'remove', 'rerender'), true)) $op = 'add';
     $d = ps_dirs();
     if (!is_dir($d['sequences']))
         ps_out(false, array('error' => 'No sequences directory at ' . $d['sequences']));
 
     $L = ps_read_layout();
-    if ($op === 'add') {
+    if ($op !== 'remove') {
         if (!count($L['strings']))
             ps_out(false, array('error' => 'No pixel strings are configured, so there is no layout to render a pattern against. Set up your outputs first.'));
         if (!is_writable($d['sequences']))
@@ -143,6 +144,26 @@ if ($action === 'patterns') {
     $useCols = count($cols) ? $cols : null;
 
     $done = array(); $failed = array();
+    if ($op === 'rerender') {
+        // Re-render whatever is already there, against the CURRENT layout. Each
+        // file names its own effect and colours, so nothing has to be re-picked -
+        // this is the button to press after changing your outputs.
+        $files = glob($d['sequences'] . '/' . PS_PAT_PREFIX . '*.fseq');
+        if (!is_array($files)) $files = array();
+        $skipped = array();
+        foreach ($files as $f) {
+            $name = basename($f);
+            $spec = ps_pattern_parse($name);
+            if ($spec === null) { $skipped[] = $name; continue; }
+            if (ps_write_pattern_fseq($f, $spec['id'], $L, $gamma, $spec['colours'])) $done[] = $name;
+            else $failed[] = $name;
+        }
+        ps_out(count($failed) === 0, array(
+            'op' => $op, 'done' => $done, 'failed' => $failed, 'skipped' => $skipped,
+            'gamma' => $gamma, 'layout' => ps_layout_summary($L),
+            'error' => count($failed) ? ('Could not re-render: ' . implode(', ', $failed)) : null,
+        ));
+    }
     if ($op === 'remove') {
         // Sweep every pattern file, colour variants included, not just the ten
         // built-in names - otherwise "Pattern - Comet (Red).fseq" would be orphaned.

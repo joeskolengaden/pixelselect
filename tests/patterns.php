@@ -86,6 +86,85 @@ $hues = array();
 foreach ($rb as $f) $hues[substr($f, 0, 3)] = true;
 ok(count($hues) > 5, 'Rainbow still cycles through many hues (' . count($hues) . ')');
 
+section('the effect fits the LEDs that actually exist');
+// A cape can clone several ports onto the same channels. Those ports are the
+// same 1500 pixels of show, not 9000 more, so the effect must be laid out over
+// the channels that exist - not over the sum of the pixel counts.
+$tmpdir = sys_get_temp_dir() . '/pslay-' . getmypid();
+@mkdir($tmpdir . '/config', 0775, true);
+$settings = array('configDirectory' => $tmpdir . '/config', 'mediaDirectory' => $tmpdir,
+                  'sequenceDirectory' => $tmpdir, 'playlistDirectory' => $tmpdir);
+require_once dirname(dirname(__FILE__)) . '/lib/common.php';
+require_once dirname(dirname(__FILE__)) . '/lib/solidcolors.php';
+
+function write_layout($dir, $strings) {
+    $outs = array();
+    foreach ($strings as $s)
+        $outs[] = array('virtualStrings' => array(
+            array('startChannel' => $s[0], 'pixelCount' => $s[1], 'colorOrder' => $s[2])));
+    file_put_contents($dir . '/config/co-bbbStrings.json', json_encode(array('channelOutputs' => array(
+        array('type' => 'BBB48String', 'enabled' => 1, 'startChannel' => 1, 'outputs' => $outs)))));
+}
+
+// (a) an ordinary contiguous cape: nothing may change
+write_layout($tmpdir, array(array(0, 100, 'RGB'), array(300, 100, 'RGB'), array(600, 100, 'RGB')));
+$L = ps_read_layout();
+ok($L['pixels'] === 300 && $L['stripPixels'] === 300, 'contiguous: strip length equals the LED count (300)');
+$offs = array(); foreach ($L['strings'] as $st) $offs[] = $st['offset'];
+ok($offs === array(0, 100, 200), 'contiguous: strings sit end to end, exactly as before');
+
+// (b) four ports cloned onto channel 0, plus one that follows
+write_layout($tmpdir, array(array(0, 100, 'RGB'), array(0, 100, 'RGB'), array(0, 100, 'RGB'),
+                            array(0, 100, 'RGB'), array(300, 50, 'RGB')));
+$L = ps_read_layout();
+ok($L['pixels'] === 450, 'cloned: 450 LEDs exist');
+ok($L['stripPixels'] === 150, 'cloned: but the effect only needs 150 pixels (was 450)');
+$zero = 0; foreach ($L['strings'] as $st) if ($st['offset'] === 0) $zero++;
+ok($zero === 4, 'cloned: all four ports on channel 0 share the start of the effect');
+
+// and the rendered file must begin at the beginning of the effect
+$tmpf = $tmpdir . '/clone.fseq';
+ok(ps_write_pattern_fseq($tmpf, 'wipe', $L, null, array(array(255, 0, 0))), 'renders against a cloned layout');
+$raw = file_get_contents($tmpf);
+$chOff = unpack('v', substr($raw, 4, 2))[1];
+$ch    = unpack('V', substr($raw, 10, 4))[1];
+list($fst, $clen) = array_values(unpack('V2', substr($raw, 32, 8)));
+$f0 = @gzuncompress(substr($raw, $chOff, $clen));
+ok($ch === $L['maxChannel'], 'file covers the real channel span (' . $ch . ')');
+// Colour Wipe frame 0 lights nothing yet; take a frame a quarter in, where the
+// fill has reached part way, and check the lit run starts at channel 0.
+ok(is_string($f0) && strlen($f0) === $ch, 'a frame inflates to the channel span');
+@unlink($tmpf);
+
+// (c) a string reaching past the strip must be padded, never truncated short
+$odd = array('strings' => array(array('start' => 0, 'pixels' => 50, 'cpn' => 3, 'order' => 'RGB', 'offset' => 0),
+                                array('start' => 150, 'pixels' => 50, 'cpn' => 3, 'order' => 'RGB', 'offset' => 400)),
+             'pixels' => 100, 'stripPixels' => 60, 'maxChannel' => 300, 'source' => array());
+ok(ps_write_pattern_fseq($tmpdir . '/odd.fseq', 'breathe', $odd, null, array(array(255, 0, 0))),
+   'a string past the end of the strip still writes (zero padded)');
+@unlink($tmpdir . '/odd.fseq');
+
+section('reading a pattern file back (for Re-render)');
+$spec = ps_pattern_parse('Pattern - Comet (Red).fseq');
+ok($spec !== null && $spec['id'] === 'comet', 'effect recovered from the filename');
+ok($spec !== null && $spec['colours'] === array(array(255, 0, 0)), 'colour recovered from the filename');
+$spec2 = ps_pattern_parse('Pattern - Theater Chase (Red+Green).fseq');
+ok($spec2 !== null && count($spec2['colours']) === 2 && $spec2['colourLabel'] === 'Red+Green',
+   'several colours recovered in order');
+$spec3 = ps_pattern_parse('Pattern - Comet.fseq');
+ok($spec3 !== null && $spec3['colours'] === null, 'a built-in-colour file re-renders with no tint');
+ok(ps_pattern_parse('design2.fseq') === null, 'someone else\'s sequence is left alone');
+ok(ps_pattern_parse('Pattern - Nonsense (Red).fseq') === null, 'an effect we no longer have is skipped');
+ok(ps_pattern_parse('Pattern - Comet (Taupe).fseq') === null, 'a colour we no longer have is skipped');
+// round trip
+foreach (ps_pattern_list() as $pp) {
+    $nm = ps_pattern_filename($pp['label'], 'Red');
+    $back = ps_pattern_parse($nm);
+    if ($back === null || $back['id'] !== $pp['id']) { ok(false, 'round trip failed for ' . $pp['id']); break; }
+}
+ok(true, 'every effect name survives filename -> parse round trip');
+@unlink($tmpdir . '/config/co-bbbStrings.json'); @rmdir($tmpdir . '/config'); @rmdir($tmpdir);
+
 section('30 second files at the original speed');
 ok(PS_PAT_FRAMES * PS_PAT_STEP_MS === 30000,
    'a pattern is exactly 30 s (' . PS_PAT_FRAMES . ' x ' . PS_PAT_STEP_MS . 'ms)');

@@ -301,6 +301,7 @@ $ps_cfg = ps_cfg_read();
           <div class="pp-row" id="ps-pat-fx"></div>
           <div class="pp-actions">
             <button id="ps-pat-go">Render</button>
+            <button class="sec" id="ps-pat-again" title="Render the pattern files you already have again, against your current outputs. Keeps each one's effect and colours.">Re-render existing</button>
             <button class="sec" id="ps-pat-cancel">Cancel</button>
             <span class="tiny" id="ps-pat-sum"></span>
           </div>
@@ -982,6 +983,28 @@ $ps_cfg = ps_cfg_read();
     patDraw();
   });
   $('ps-pat-cancel').addEventListener('click', function(){ $('ps-pat-panel').hidden = true; });
+
+  /* A pattern is rendered for the pixel layout that existed at the time, so
+     changing your outputs leaves the old files pointing at pixels that moved.
+     Each file names its own effect and colours, so re-rendering needs no input. */
+  $('ps-pat-again').addEventListener('click', function(){
+    var b = $('ps-pat-again'), was = b.textContent;
+    b.disabled = true; b.textContent = 'Re-rendering\u2026';
+    post('patterns', {op: 'rerender'}, function(r){
+      b.disabled = false; b.textContent = was;
+      if (!r.ok) { toast(r.error || 'Could not re-render them', true); return; }
+      if (!r.done.length && !(r.skipped || []).length) {
+        toast('There are no pattern files to re-render yet', true);
+        return;
+      }
+      $('ps-pat-panel').hidden = true;
+      var msg = 'Re-rendered ' + r.done.length + ' pattern' + (r.done.length === 1 ? '' : 's')
+              + ' for ' + r.layout;
+      if ((r.skipped || []).length) msg += ' \u00b7 skipped ' + r.skipped.length + ' it could not read';
+      toast(msg);
+      load();
+    });
+  });
   $('ps-pat-go').addEventListener('click', function(){
     var b = $('ps-pat-go'), was = b.textContent;
     b.disabled = true; b.textContent = 'Rendering…';

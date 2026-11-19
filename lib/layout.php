@@ -60,11 +60,18 @@ function ps_read_layout() {
                         $n = isset($v['pixelCount']) ? (int)$v['pixelCount'] : 0;
                         if ($n <= 0) continue;
                         $order = isset($v['colorOrder']) ? $v['colorOrder'] : 'RGB';
+                        $start = isset($v['startChannel']) ? (int)$v['startChannel'] : 0;
+                        $cpn   = ps_channels_per_node($order);
                         $strings[] = array(
-                            'start'  => isset($v['startChannel']) ? (int)$v['startChannel'] : 0,
+                            'start'  => $start,
                             'pixels' => $n,
-                            'cpn'    => ps_channels_per_node($order),
+                            'cpn'    => $cpn,
                             'order'  => strtoupper(trim((string)$order)),
+                            // Where this string sits on the effect's 1-D strip. Derived from
+                            // the CHANNEL it starts at, not from how many pixels happen to be
+                            // listed before it - two ports cloned onto the same channels must
+                            // land on the same stretch of the effect and mirror each other.
+                            'offset' => (int)floor($start / max(1, $cpn)),
                         );
                     }
                 }
@@ -74,13 +81,19 @@ function ps_read_layout() {
     }
 
     usort($strings, function ($a, $b) { return $a['start'] - $b['start']; });
-    $pixels = 0; $max = 0;
+    $pixels = 0; $max = 0; $strip = 0;
     foreach ($strings as $s) {
         $pixels += $s['pixels'];
         $end = $s['start'] + $s['pixels'] * $s['cpn'];
         if ($end > $max) $max = $end;
+        $tip = $s['offset'] + $s['pixels'];
+        if ($tip > $strip) $strip = $tip;
     }
-    return array('strings' => $strings, 'pixels' => $pixels,
+    // 'pixels' is how many LEDs exist (what a person counts); 'stripPixels' is how
+    // long the effect has to be to cover them. They differ whenever ports are
+    // cloned onto the same channels: six 1500px ports sharing channel 0 are 9000
+    // LEDs but only 1500 pixels of effect.
+    return array('strings' => $strings, 'pixels' => $pixels, 'stripPixels' => $strip,
                  'maxChannel' => $max, 'source' => $src);
 }
 

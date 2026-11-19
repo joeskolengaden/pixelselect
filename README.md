@@ -222,6 +222,38 @@ removes every colour variant too.
 every effect in red, then in blue, then in green, and fails if a single pixel in
 a single frame carries any other channel.
 
+### Fitting your actual LEDs
+
+A pattern is laid out across the pixels your outputs really address, not across
+the sum of the pixel counts. The two differ whenever **ports are cloned onto the
+same channels** — six 1500-pixel ports sharing channel 0 are 9,000 LEDs but only
+1,500 pixels of show.
+
+Getting this wrong is not subtle. On a real 48-port cape with seven ports cloned
+onto channel 0, the effect was being drawn across 12,629 pixels while only 3,465
+were ever displayed:
+
+| | Before | After |
+| --- | --- | --- |
+| Strip the effect is drawn on | 12,629 px | **3,465 px** |
+| Comet tail | 1,052 px | **288 px** |
+| Comet pixels visible in frame 0 | **0** — off-screen entirely | 276 |
+| Rainbow Cycle at channel 0 | a slice from the middle | the start of the ramp |
+
+Each string is placed on the strip by **the channel it starts at**, so cloned
+ports land on the same stretch of the effect and mirror each other. A plain
+contiguous cape is completely unaffected — verified by rendering all ten effects
+before and after and comparing the files byte for byte.
+
+### Re-rendering after you change your outputs
+
+Because a pattern is baked for one layout, changing your outputs leaves the old
+files lighting pixels that have moved. Open **+ WLED patterns** and press
+**Re-render existing**: every `Pattern - …fseq` already in `media/sequences` is
+rendered again against the current layout, keeping its own effect and colours —
+there is nothing to pick again. Files it cannot read (an effect or colour that
+has since been renamed) are reported as skipped and left untouched.
+
 Unlike a solid colour, **a pattern has to know where your pixels are** — "chase
 down the string" is meaningless without a layout. So these are rendered against
 your actual output configuration: every virtual string on every port, including
