@@ -29,6 +29,7 @@ if ($action === 'lists') {
         'sets'      => ps_sets_read(),
         'palette'   => ps_palette(),
         'patterns'  => ps_pattern_list(),
+        'patternSeconds' => (int)round(PS_PAT_FRAMES * PS_PAT_STEP_MS / 1000),
         'layout'    => ps_layout_summary(),
         'config'    => ps_cfg_read(),
         'designs'   => ps_designs_read(),

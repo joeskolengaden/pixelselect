@@ -17,8 +17,15 @@ require_once(dirname(__FILE__) . '/layout.php');
 require_once(dirname(__FILE__) . '/fseq.php');
 
 define('PS_PAT_PREFIX', 'Pattern - ');
-define('PS_PAT_FRAMES', 200);     // 200 x 50ms = exactly 10 seconds
+// 30 seconds. A 10 s loop is too short to read a slow effect - a comet barely
+// gets a lap in - so the files are three times longer. The motion is NOT three
+// times slower: PS_PAT_CYCLES repeats the same 10 s of movement three times, so
+// frames 0..199 are byte-identical to the old whole file and then it repeats.
+// Change the length by changing FRAMES and CYCLES together, or everything
+// suddenly crawls.
+define('PS_PAT_FRAMES', 600);     // 600 x 50ms = exactly 30 seconds
 define('PS_PAT_STEP_MS', 50);     // 20fps, smooth enough for chases and fades
+define('PS_PAT_CYCLES', 3);       // laps of the effect inside those 30 seconds
 define('PS_PAT_GAMMA', 2.2);
 
 function ps_pattern_list() {
@@ -114,9 +121,11 @@ function ps_scale_rgb($c, $s) {
  *
  * $colours: null for the built-in look, or a list of RGB triples to use instead.
  */
-function ps_pattern_strip_frames($id, $n, $frames = PS_PAT_FRAMES, $colours = null) {
+function ps_pattern_strip_frames($id, $n, $frames = PS_PAT_FRAMES, $colours = null,
+                                 $cycles = PS_PAT_CYCLES) {
     $out = array();
     $black = str_repeat("\0", $n * 3);
+    $cy  = max(1, (int)$cycles);     // laps of the effect across $frames
     $col = is_array($colours) && count($colours) ? array_values($colours) : null;
     $tinted = ($col !== null);
 
@@ -129,7 +138,7 @@ function ps_pattern_strip_frames($id, $n, $frames = PS_PAT_FRAMES, $colours = nu
     switch ($id) {
     case 'rainbow':                       // whole strip one hue, cycling
         for ($f = 0; $f < $frames; $f++) {
-            $c = $tinted ? ps_grad($col, $f / $frames) : ps_hsv($f / $frames);
+            $c = $tinted ? ps_grad($col, $f * $cy / $frames) : ps_hsv($f * $cy / $frames);
             $out[] = str_repeat(ps_px($c), $n);
         }
         return $out;
@@ -140,13 +149,13 @@ function ps_pattern_strip_frames($id, $n, $frames = PS_PAT_FRAMES, $colours = nu
             $t = $i / max(1, $n);
             $base .= ps_px($tinted ? ps_grad($col, $t) : ps_hsv($t));
         }
-        for ($f = 0; $f < $frames; $f++) $out[] = $rot($base, (int)round($f * $n / $frames));
+        for ($f = 0; $f < $frames; $f++) $out[] = $rot($base, (int)round($f * $n * $cy / $frames));
         return $out;
 
     case 'breathe':                       // one colour, sine fade
         for ($f = 0; $f < $frames; $f++) {
-            $s = 0.08 + 0.92 * (0.5 - 0.5 * cos(2 * M_PI * $f / $frames));
-            $c = $tinted ? ps_blend($col, $f / $frames) : array(255, 150, 40);
+            $s = 0.08 + 0.92 * (0.5 - 0.5 * cos(2 * M_PI * $f * $cy / $frames));
+            $c = $tinted ? ps_blend($col, $f * $cy / $frames) : array(255, 150, 40);
             $out[] = str_repeat(ps_px($c, $s), $n);
         }
         return $out;
@@ -159,7 +168,7 @@ function ps_pattern_strip_frames($id, $n, $frames = PS_PAT_FRAMES, $colours = nu
             $fill .= ps_px($c);
         }
         for ($f = 0; $f < $frames; $f++) {
-            $p = ($f * 2.0 / $frames);
+            $p = fmod($f * 2.0 * $cy / $frames, 2.0);
             if ($p < 1.0) { $k = (int)round($p * $n);          $out[] = substr($fill, 0, $k * 3) . substr($black, 0, ($n - $k) * 3); }
             else          { $k = (int)round(($p - 1.0) * $n);  $out[] = substr($black, 0, $k * 3) . substr($fill, $k * 3); }
         }
@@ -181,7 +190,7 @@ function ps_pattern_strip_frames($id, $n, $frames = PS_PAT_FRAMES, $colours = nu
             $c = $tinted ? ps_blend($col, $i / max(1, $n)) : array(255, 40, 120);
             $base .= ps_px($c, $s);
         }
-        for ($f = 0; $f < $frames; $f++) $out[] = $rot($base, (int)round($f * $n / $frames));
+        for ($f = 0; $f < $frames; $f++) $out[] = $rot($base, (int)round($f * $n * $cy / $frames));
         return $out;
 
     case 'comet':                         // bright head with a fading tail
@@ -193,7 +202,7 @@ function ps_pattern_strip_frames($id, $n, $frames = PS_PAT_FRAMES, $colours = nu
                          : array(120, 255, 200);
             $base .= ps_px($c, $d * $d);
         }
-        for ($f = 0; $f < $frames; $f++) $out[] = $rot($base, -(int)round($f * $n / $frames));
+        for ($f = 0; $f < $frames; $f++) $out[] = $rot($base, -(int)round($f * $n * $cy / $frames));
         return $out;
 
     case 'scan':                          // Larson scanner, bounces end to end
@@ -205,7 +214,7 @@ function ps_pattern_strip_frames($id, $n, $frames = PS_PAT_FRAMES, $colours = nu
             $blob .= ps_px($c, $s);
         }
         for ($f = 0; $f < $frames; $f++) {
-            $t = $f / $frames * 2.0;
+            $t = fmod($f * $cy / $frames * 2.0, 2.0);
             $pos = $t < 1.0 ? $t : (2.0 - $t);
             $k = (int)round($pos * max(0, $n - $w));
             $out[] = substr($black, 0, $k * 3) . $blob . substr($black, 0, ($n - $w - $k) * 3);
@@ -265,7 +274,7 @@ function ps_gamma_map($g) {
 function ps_write_pattern_fseq($path, $id, $layout, $gamma = null, $colours = null) {
     if (!count($layout['strings'])) return false;
     $n = $layout['pixels'];
-    $strips = ps_pattern_strip_frames($id, $n, PS_PAT_FRAMES, $colours);
+    $strips = ps_pattern_strip_frames($id, $n, PS_PAT_FRAMES, $colours, PS_PAT_CYCLES);
     if (!$strips) return false;
 
     $useGamma = ($gamma !== null && $gamma > 1.0);

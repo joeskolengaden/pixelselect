@@ -86,6 +86,45 @@ $hues = array();
 foreach ($rb as $f) $hues[substr($f, 0, 3)] = true;
 ok(count($hues) > 5, 'Rainbow still cycles through many hues (' . count($hues) . ')');
 
+section('30 second files at the original speed');
+ok(PS_PAT_FRAMES * PS_PAT_STEP_MS === 30000,
+   'a pattern is exactly 30 s (' . PS_PAT_FRAMES . ' x ' . PS_PAT_STEP_MS . 'ms)');
+ok(PS_PAT_FRAMES % PS_PAT_CYCLES === 0,
+   'the frame count divides evenly into ' . PS_PAT_CYCLES . ' laps');
+
+// The whole point of PS_PAT_CYCLES: three times longer must NOT mean three times
+// slower. One lap of the long file has to equal a single-lap render exactly.
+$lap = PS_PAT_FRAMES / PS_PAT_CYCLES;
+$slow = 0;
+foreach (ps_pattern_list() as $p) {
+    if ($p['id'] === 'chase') continue;                 // advances 1px/frame, so it never loops
+    $long = ps_pattern_strip_frames($p['id'], 240, PS_PAT_FRAMES, null, PS_PAT_CYCLES);
+    $one  = ps_pattern_strip_frames($p['id'], 240, $lap, null, 1);
+    if (implode('', array_slice($long, 0, $lap)) !== implode('', $one)) $slow++;
+}
+ok($slow === 0, 'lap one of the 30 s file is identical to a 10 s render - same speed, not slower');
+
+$chase = ps_pattern_strip_frames('chase', 240, PS_PAT_FRAMES, null, PS_PAT_CYCLES);
+ok(count($chase) === PS_PAT_FRAMES, 'a full render returns all ' . PS_PAT_FRAMES . ' frames');
+
+// 600 blocks does not fit in the one-byte field, so the writer has to use the
+// 12-bit form (high nibble of byte 20). Worth asserting: patterns never needed it
+// before this change.
+$layout = array('strings' => array(array('start' => 0, 'pixels' => 100, 'cpn' => 3, 'order' => 'RGB')),
+                'pixels' => 100, 'maxChannel' => 300, 'source' => array());
+$tmp = sys_get_temp_dir() . '/pspat-' . getmypid() . '.fseq';
+ok(ps_write_pattern_fseq($tmp, 'comet', $layout, null, array(array(255, 0, 0))), 'writes a 30 s pattern file');
+$raw = file_get_contents($tmp);
+$chOff  = unpack('v', substr($raw, 4, 2))[1];
+$frames = unpack('V', substr($raw, 14, 4))[1];
+$step   = ord($raw[18]);
+$blocks = ((ord($raw[20]) >> 4) & 0x0F) * 256 + ord($raw[21]);
+ok($frames === PS_PAT_FRAMES, 'header says ' . $frames . ' frames');
+ok($frames * $step === 30000, 'header works out to 30 s');
+ok($blocks === PS_PAT_FRAMES, 'all ' . $blocks . ' blocks survive the 12-bit block count (>255)');
+ok($chOff === 32 + $blocks * 8, 'data offset accounts for the longer block index');
+@unlink($tmp);
+
 section('filenames');
 ok(ps_pattern_filename('Comet') === 'Pattern - Comet.fseq', 'no colour: the original name');
 ok(ps_pattern_filename('Comet', 'Red') === 'Pattern - Comet (Red).fseq', 'one colour is named in brackets');

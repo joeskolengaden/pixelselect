@@ -182,6 +182,23 @@ effects: Rainbow, Rainbow Cycle, Breathe, Colour Wipe, Theater Chase, Running
 Lights, Comet, Larson Scanner, Twinkle and Fire Flicker. Ten seconds each at
 20 fps.
 
+### Length
+
+A pattern file is **30 seconds** (600 frames at 50 ms). A 10 second loop was too
+short to read a slow effect — a comet barely got one lap — but *longer must not
+mean slower*, so the file holds **three laps of the same 10 seconds of movement**
+rather than one lap stretched out. The motion runs at exactly the speed it always
+did: lap one is byte-identical to the old whole file, asserted in
+`tests/patterns.php`.
+
+Change `PS_PAT_FRAMES` and `PS_PAT_CYCLES` together or everything crawls. Note
+600 compression blocks no longer fit the one-byte block count, so these files use
+the 12-bit form — fine on FPP 5.4+, and covered by a test.
+
+Twinkle and Fire Flicker deliberately do *not* repeat lap to lap: they keep
+drawing fresh sparkles, so a 30 second file does not look like the same 10
+seconds three times.
+
 ### Choosing the colours
 
 By default each effect keeps the colours it was designed with. Press **+ WLED

@@ -860,7 +860,7 @@ $ps_cfg = ps_cfg_read();
     post('lists', {}, function(r){
       if (!r.ok){ toast('Could not load plugin data', true); return; }
       SEQ = r.sequences || []; PL = r.playlists || []; PINS = r.pins || [];
-      D = r.designs || []; SETS = r.sets || []; PALETTE = r.palette || []; PATTERNS = r.patterns || []; LAYOUT = r.layout || '';
+      D = r.designs || []; SETS = r.sets || []; PALETTE = r.palette || []; PATTERNS = r.patterns || []; LAYOUT = r.layout || ''; PATSECS = r.patternSeconds || 10;
       // A throw in here used to leave the page silently half-drawn, which is a
       // miserable thing to debug from a screenshot.
       try {
@@ -906,6 +906,7 @@ $ps_cfg = ps_cfg_read();
      Patterns can be rendered in chosen palette colours instead of the colours
      each effect was designed with. Nothing is picked by default, which keeps the
      built-in look for anyone who just wants the ten originals. */
+  var PATSECS  = 10;     // seconds per pattern file, told to us by action.php
   var PAT_COLS = [];     // palette ids, in the order picked. [] = built-in look
   var PAT_FX   = null;   // effect ids, or null for "all of them"
 
