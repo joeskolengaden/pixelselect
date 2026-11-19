@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 320" width="860" height="320" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+  <rect width="860" height="320" fill="#ffffff"/>
+  <text x="20" y="28" font-size="13" font-weight="700" fill="#0f172a">Pick the effects, pick the colours. Every combination becomes its own 30-second file.</text>
+
+  <!-- effects -->
+  <text x="20" y="58" font-size="10.5" font-weight="700" fill="#94a3b8">EFFECTS</text>
+  <rect x="20" y="68" width="92" height="26" rx="13" fill="#eef2ff" stroke="#3b6ef0" stroke-width="1.6"/>
+  <text x="34" y="85" font-size="11" font-weight="700" fill="#0f172a">Comet</text>
+  <rect x="120" y="68" width="118" height="26" rx="13" fill="#eef2ff" stroke="#3b6ef0" stroke-width="1.6"/>
+  <text x="134" y="85" font-size="11" font-weight="700" fill="#0f172a">Theater Chase</text>
+  <rect x="246" y="68" width="112" height="26" rx="13" fill="#f8fafc" stroke="#e3e8ef"/>
+  <text x="260" y="85" font-size="11" fill="#94a3b8">Rainbow Cycle</text>
+  <rect x="366" y="68" width="84" height="26" rx="13" fill="#f8fafc" stroke="#e3e8ef"/>
+  <text x="380" y="85" font-size="11" fill="#94a3b8">Twinkle</text>
+  <text x="462" y="85" font-size="10.5" fill="#94a3b8">&#8230; ten in all</text>
+
+  <!-- colours -->
+  <text x="20" y="128" font-size="10.5" font-weight="700" fill="#94a3b8">COLOUR</text>
+  <rect x="20" y="138" width="92" height="26" rx="13" fill="#f8fafc" stroke="#e3e8ef"/>
+  <rect x="31" y="145" width="12" height="12" rx="6" fill="#94a3b8"/>
+  <text x="50" y="155" font-size="11" fill="#94a3b8">Built-in</text>
+  <rect x="120" y="138" width="74" height="26" rx="13" fill="#eef2ff" stroke="#3b6ef0" stroke-width="1.6"/>
+  <rect x="131" y="145" width="12" height="12" rx="6" fill="#ef4444"/>
+  <text x="150" y="155" font-size="11" font-weight="700" fill="#0f172a">Red</text>
+  <rect x="202" y="138" width="80" height="26" rx="13" fill="#f8fafc" stroke="#e3e8ef"/>
+  <rect x="213" y="145" width="12" height="12" rx="6" fill="#3b82f6"/>
+  <text x="232" y="155" font-size="11" fill="#94a3b8">Blue</text>
+  <rect x="290" y="138" width="86" height="26" rx="13" fill="#f8fafc" stroke="#e3e8ef"/>
+  <rect x="301" y="145" width="12" height="12" rx="6" fill="#22c55e"/>
+  <text x="320" y="155" font-size="11" fill="#94a3b8">Green</text>
+  <text x="388" y="155" font-size="10.5" fill="#94a3b8">&#8230; 24 to choose from</text>
+
+  <!-- arrow -->
+  <path d="M430 196 L430 214" stroke="#3b6ef0" stroke-width="2" fill="none"/>
+  <path d="M430 222 l-6 -10 h12 z" fill="#3b6ef0"/>
+
+  <!-- results -->
+  <rect x="140" y="232" width="276" height="34" rx="8" fill="#ffffff" stroke="#3b6ef0" stroke-width="1.6"/>
+  <rect x="152" y="242" width="14" height="14" rx="4" fill="#ef4444"/>
+  <text x="176" y="254" font-size="11.5" font-weight="600" fill="#0f172a">Pattern - Comet (Red).fseq</text>
+  <rect x="444" y="232" width="300" height="34" rx="8" fill="#ffffff" stroke="#3b6ef0" stroke-width="1.6"/>
+  <rect x="456" y="242" width="14" height="14" rx="4" fill="#ef4444"/>
+  <text x="480" y="254" font-size="11.5" font-weight="600" fill="#0f172a">Pattern - Theater Chase (Red).fseq</text>
+
+  <text x="20" y="296" font-size="10.5" fill="#64748b">One colour means that colour only. Several gradient or cycle through them. 30 s is three laps of the same motion &#8212; longer, not slower.</text>
+</svg>

@@ -195,9 +195,9 @@ $ps_cfg = ps_cfg_read();
 #ps .patpanel .pp-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px}
 #ps .cchip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;
   border:1px solid var(--line);background:var(--bg);color:inherit;font:inherit;font-size:12px;cursor:pointer}
-#ps .cchip:hover{border-color:var(--accent)}
-#ps .cchip.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);font-weight:600}
-#ps .tag.grp{background:var(--accent);color:#fff;border-color:var(--accent)}
+#ps .cchip:hover{border-color:var(--acc)}
+#ps .cchip.on{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc);font-weight:600}
+#ps .tag.grp{background:var(--acc);color:#fff;border-color:var(--acc)}
 #ps .gpick{display:flex;flex-direction:column;gap:4px;max-height:190px;overflow:auto;margin-bottom:8px}
 #ps .gpick .gi{display:flex;align-items:center;gap:8px;padding:4px 8px;border:1px solid var(--line);border-radius:8px;font-size:12px}
 #ps .gpick .gi .n{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

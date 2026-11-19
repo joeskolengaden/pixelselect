@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 360" width="860" height="360" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+  <rect width="860" height="360" fill="#ffffff"/>
+  <defs>
+    <linearGradient id="comet" x1="0" x2="1">
+      <stop offset="0" stop-color="#ef4444" stop-opacity="0"/>
+      <stop offset="1" stop-color="#ef4444" stop-opacity="1"/>
+    </linearGradient>
+  </defs>
+  <text x="20" y="28" font-size="13" font-weight="700" fill="#0f172a">The effect is drawn across the pixels your ports really address &#8212; not the sum of their pixel counts.</text>
+  <text x="20" y="50" font-size="11" fill="#64748b">On a cape where seven ports are cloned onto channel 0, those ports are the same 1,500 pixels of show, not 9,000 more.</text>
+
+  <!-- BEFORE -->
+  <text x="20" y="88" font-size="11" font-weight="700" fill="#ef4444">BEFORE</text>
+  <text x="80" y="88" font-size="11" fill="#64748b">effect spread over 12,629 px &#8212; only the first 3,465 are ever shown</text>
+  <rect x="20" y="98" width="820" height="38" rx="6" fill="#f8fafc" stroke="#e3e8ef"/>
+  <rect x="20" y="98" width="225" height="38" rx="6" fill="#eef2ff" stroke="#3b6ef0" stroke-width="1.6"/>
+  <text x="34" y="122" font-size="10.5" font-weight="700" fill="#3b6ef0">visible 3,465 px</text>
+  <rect x="520" y="106" width="160" height="22" rx="4" fill="url(#comet)"/>
+  <circle cx="684" cy="117" r="9" fill="#ef4444"/>
+  <text x="700" y="121" font-size="10.5" font-weight="700" fill="#ef4444">comet, off-screen</text>
+  <text x="20" y="156" font-size="10.5" fill="#ef4444" font-weight="600">tail 1,052 px &#183; 0 pixels lit in frame 0</text>
+
+  <!-- AFTER -->
+  <text x="20" y="206" font-size="11" font-weight="700" fill="#17a06a">AFTER</text>
+  <text x="80" y="206" font-size="11" fill="#64748b">effect drawn across the 3,465 px that exist</text>
+  <rect x="20" y="216" width="225" height="38" rx="6" fill="#eef2ff" stroke="#3b6ef0" stroke-width="1.6"/>
+  <rect x="28" y="224" width="72" height="22" rx="4" fill="url(#comet)"/>
+  <circle cx="104" cy="235" r="9" fill="#ef4444"/>
+  <text x="258" y="240" font-size="10.5" font-weight="600" fill="#17a06a">tail 288 px &#183; 276 pixels lit &#8212; in proportion to a 1,500 px port</text>
+
+  <!-- cloned ports -->
+  <text x="20" y="292" font-size="10.5" font-weight="700" fill="#94a3b8">SEVEN PORTS, ALL STARTING AT CHANNEL 0</text>
+  <g fill="#f8fafc" stroke="#e3e8ef">
+    <rect x="20" y="302" width="96" height="22" rx="5"/>
+    <rect x="124" y="302" width="96" height="22" rx="5"/>
+    <rect x="228" y="302" width="96" height="22" rx="5"/>
+    <rect x="332" y="302" width="96" height="22" rx="5"/>
+    <rect x="436" y="302" width="96" height="22" rx="5"/>
+    <rect x="540" y="302" width="96" height="22" rx="5"/>
+    <rect x="644" y="302" width="96" height="22" rx="5"/>
+  </g>
+  <g font-size="9.5" fill="#64748b">
+    <text x="42" y="317">port 1</text><text x="146" y="317">port 2</text><text x="250" y="317">port 3</text>
+    <text x="354" y="317">port 4</text><text x="458" y="317">port 5</text><text x="562" y="317">port 6</text>
+    <text x="666" y="317">port 7</text>
+  </g>
+  <text x="752" y="317" font-size="10.5" font-weight="700" fill="#17a06a">&#8592; all mirror</text>
+  <text x="20" y="344" font-size="10.5" fill="#64748b">Each string is placed by the channel it starts at, so cloned ports land on the same stretch of the effect. Contiguous capes are unchanged.</text>
+</svg>

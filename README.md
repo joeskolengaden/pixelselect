@@ -124,6 +124,8 @@ Normally one design loops until the button is pressed. A **group** is one entry
 in the same list that plays several designs in turn and then starts again — the
 button steps *past* the whole group, not through its members.
 
+![A design list holding two single designs and a group of three; the group plays its members in order and loops, while the pushbutton steps past the whole group](docs/groups.png)
+
 Press **+ Group** under the design list, name it, click the designs to include,
 order them with the arrows, and save. It appears beside the single designs with
 a **group · N** tag; the pencil re-opens it to change the members.
@@ -232,6 +234,8 @@ By default each effect keeps the colours it was designed with. Press **+ WLED
 patterns** and a chooser opens: pick one or more colours from the same palette
 the solid colours use, pick which effects you want, and press **Render**.
 
+![Choosing effects and colours: each combination becomes its own 30 second file, named after the effect and the colours](docs/patterns.png)
+
 - **One colour** renders the effect in that colour *only* — nothing else ever
   appears in the file. The two rainbows, which have no colour of their own,
   become a brightness ramp of your colour instead of a flat wash, which is what
@@ -259,6 +263,8 @@ same channels** — six 1500-pixel ports sharing channel 0 are 9,000 LEDs but on
 Getting this wrong is not subtle. On a real 48-port cape with seven ports cloned
 onto channel 0, the effect was being drawn across 12,629 pixels while only 3,465
 were ever displayed:
+
+![Before and after: the comet drawn across 12,629 pixels falls outside the 3,465 that are visible, and after the fix is drawn across the pixels that exist](docs/fit.png)
 
 | | Before | After |
 | --- | --- | --- |
