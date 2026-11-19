@@ -34,14 +34,22 @@ function ps_status_path()  { return ps_shm_dir() . '/pixelselect_status.json'; }
 function ps_pins_path()    { return ps_shm_dir() . '/pixelselect_pins.json'; }
 function ps_cmd_path()     { return ps_shm_dir() . '/pixelselect_cmd'; }
 
+/*
+ * Shipped defaults. These are the WinterLights build settings, captured from a
+ * controller running in the field on 2026-11-19, so a fresh install comes up
+ * already wired for our capes instead of blank: toggle on P9-27, pushbutton on
+ * P9-29, both active-low with the internal pull-up, takeover and hand-back on.
+ * Change them here AND in pluginInfo.json's settingsSchema - FPP's own settings
+ * page reads the schema, the plugin reads this.
+ */
 function ps_defaults() {
     return array(
-        'enabled'           => '0',
-        'virtual_enable'    => '0',
-        'enable_pin'        => '',
+        'enabled'           => '1',
+        'virtual_enable'    => '1',
+        'enable_pin'        => 'P9-27',
         'enable_active_low' => '1',
         'enable_pull'       => 'gpio_pu',
-        'next_pin'          => '',
+        'next_pin'          => 'P9-29',
         'next_active_low'   => '1',
         'next_pull'         => 'gpio_pu',
         'debounce_ms'       => '30',

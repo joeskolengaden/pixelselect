@@ -227,6 +227,27 @@ and ground, with FPP's internal pull-up holding the pin high while it is open.
 
 ![Wiring: two toggle switches and a shared pushbutton, each between a GPIO pin and ground](docs/wiring.png)
 
+### Out of the box
+
+A fresh install is already set up for the standard WinterLights build, so a
+controller works as soon as the panel is plugged in — there is nothing to
+configure first:
+
+| Setting | Ships as |
+| --- | --- |
+| Plugin enabled | **on** |
+| Toggle switch (set "Designs") | **P9-27**, active-low, internal pull-up |
+| Pushbutton | **P9-29**, active-low, internal pull-up |
+| Software override | **on** — so the plugin also runs before any switch is wired |
+| Take over playback / hand back to the scheduler | both **on** |
+| Loop the design / wrap past the last one | both **on** |
+| Debounce / long-press | 30 ms / 1200 ms, long press does nothing |
+
+The design list starts empty: press **+ Solid colours** or **+ Patterns** on the
+plugin page to fill it, or add your own sequences. Change any of this on the
+plugin page — your edits are kept across updates, since the defaults only apply
+when there is no saved configuration yet.
+
 If you wire to 3.3 V instead, change the line under the switch list to
 *"Everything is wired **to 3.3 V** with **the internal pull-down**"*. It applies to
 every switch and the button at once, because a panel is invariably wired one way
