@@ -118,6 +118,33 @@ badged **missing** rather than silently doing nothing when the button reaches it
 
 ![The design list, with a tab per switch](docs/ui-designs.png)
 
+## Groups: one entry that plays several designs
+
+Normally one design loops until the button is pressed. A **group** is one entry
+in the same list that plays several designs in turn and then starts again — the
+button steps *past* the whole group, not through its members.
+
+Press **+ Group** under the design list, name it, click the designs to include,
+order them with the arrows, and save. It appears beside the single designs with
+a **group · N** tag; the pencil re-opens it to change the members.
+
+A group is stored as a **real FPP playlist** in `media/playlists`. That is
+deliberate: FPP's playlist engine already walks items, honours each sequence's
+duration, picks up any media file and repeats seamlessly, and the plugin already
+knew how to start and own a playlist design. So a group needed **no new playback
+code at all** — not a line of C++ — and behaves the same on 5.4 and 9.x.
+
+Two details worth knowing:
+
+- **Looping comes from the plugin, not the file.** The plugin starts a design
+  with `Start Playlist <name> <repeat>`, and that flag loops the group. The
+  file's own `repeat` stays 0, so the same group still behaves sensibly if you
+  start it by hand from FPP's playlist page.
+- **Your own playlists are safe.** Groups are tagged in their description field,
+  and the plugin refuses to overwrite, rename or delete any playlist it did not
+  create — it tells you to pick another name instead. Deleting a group deletes
+  only the group; the sequences inside it are untouched.
+
 ## Built-in solid colours
 
 A customer who just wants "make it all red" should not have to open xLights. The

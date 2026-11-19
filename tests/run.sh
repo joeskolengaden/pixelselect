@@ -28,6 +28,9 @@ if command -v php >/dev/null 2>&1; then
     echo "=== PHP checks: pattern colours ==="
     php "$HERE/patterns.php" || exit 1
     echo
+    echo "=== PHP checks: design groups ==="
+    php "$HERE/groups.php" || exit 1
+    echo
 else
     echo "(php not found - skipping the solid-colour checks)"
 fi

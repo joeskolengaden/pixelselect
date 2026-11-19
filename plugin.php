@@ -197,6 +197,11 @@ $ps_cfg = ps_cfg_read();
   border:1px solid var(--line);background:var(--bg);color:inherit;font:inherit;font-size:12px;cursor:pointer}
 #ps .cchip:hover{border-color:var(--accent)}
 #ps .cchip.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);font-weight:600}
+#ps .tag.grp{background:var(--accent);color:#fff;border-color:var(--accent)}
+#ps .gpick{display:flex;flex-direction:column;gap:4px;max-height:190px;overflow:auto;margin-bottom:8px}
+#ps .gpick .gi{display:flex;align-items:center;gap:8px;padding:4px 8px;border:1px solid var(--line);border-radius:8px;font-size:12px}
+#ps .gpick .gi .n{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#ps .gname{width:100%;max-width:320px;margin-bottom:10px}
 #ps .cchip .cb{width:12px;height:12px;border-radius:50%;border:1px solid rgba(0,0,0,.25);flex:none}
 </style>
 
@@ -293,6 +298,7 @@ $ps_cfg = ps_cfg_read();
         <button id="ps-add-btn">Add design</button>
         <button class="sec" id="ps-solid-btn" title="Create one looping .fseq per colour in media/sequences">+ Solid colours</button>
         <button class="sec" id="ps-pat-btn" title="Create WLED-style animated patterns, rendered for your pixel layout">+ WLED patterns</button>
+          <button class="sec" id="ps-grp-btn" title="Make one entry that plays several designs in turn and loops">+ Group</button>
         <div class="patpanel" id="ps-pat-panel" hidden>
           <div class="pp-hd">Colour</div>
           <div class="pp-row" id="ps-pat-cols"></div>
@@ -304,6 +310,21 @@ $ps_cfg = ps_cfg_read();
             <button class="sec" id="ps-pat-again" title="Render the pattern files you already have again, against your current outputs. Keeps each one's effect and colours.">Re-render existing</button>
             <button class="sec" id="ps-pat-cancel">Cancel</button>
             <span class="tiny" id="ps-pat-sum"></span>
+          </div>
+        </div>
+        <div class="patpanel" id="ps-grp-panel" hidden>
+          <div class="pp-hd">Group name</div>
+          <input type="text" class="gname" id="ps-grp-name" placeholder="e.g. Winter mix" maxlength="80">
+          <div class="pp-hd">In this group <span class="tiny" id="ps-grp-count"></span></div>
+          <div class="gpick" id="ps-grp-chosen"></div>
+          <div class="pp-hd">Add a design</div>
+          <div class="pp-row" id="ps-grp-avail"></div>
+          <div class="pp-note tiny">The group plays these in order and starts again at the top. It sits in the design list beside the single designs, and the button steps past the whole group.</div>
+          <div class="pp-actions">
+            <button id="ps-grp-save">Save group</button>
+            <button class="sec" id="ps-grp-cancel">Cancel</button>
+            <button class="danger" id="ps-grp-del" hidden>Delete group</button>
+            <span class="tiny" id="ps-grp-sum"></span>
           </div>
         </div>
       </div>
@@ -416,7 +437,7 @@ $ps_cfg = ps_cfg_read();
 <script>
 (function(){
   var BASE = 'plugin.php?plugin=pixelselect&page=';
-  var D = [], SETS = [], PINS = [], SEQ = [], PL = [], CFG = {}, PALETTE = [], PATTERNS = [], LAYOUT = '';
+  var D = [], SETS = [], PINS = [], SEQ = [], PL = [], CFG = {}, PALETTE = [], PATTERNS = [], LAYOUT = '', GROUPS = [];
   var curSet = 0, liveSets = [], saveTimer = null, dragFrom = -1;
   function $(id){ return document.getElementById(id); }
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){
@@ -668,7 +689,9 @@ $ps_cfg = ps_cfg_read();
                '<div class="lb"><input type="text" value="' + esc(d.label) + '" data-lab="' + i + '" ' +
                  'aria-label="Name for design ' + (pos+1) + '"></div>' +
                '<div class="src">' +
-                 '<span class="tag ' + (d.type === 'sequence' ? 'seq' : '') + '">' + (d.type === 'sequence' ? 'seq' : 'list') + '</span>' +
+                 (function(){ var g = groupOf(d);
+                    if (g) return '<span class="tag grp">group \u00b7 ' + g.items.length + '</span>';
+                    return '<span class="tag ' + (d.type === 'sequence' ? 'seq' : '') + '">' + (d.type === 'sequence' ? 'seq' : 'list') + '</span>'; })() +
                  '<span>' + esc(d.name) + '</span>' +
                  (d.missing ? '<span class="tag miss">missing</span>' : '') +
                '</div>' +
@@ -676,6 +699,7 @@ $ps_cfg = ps_cfg_read();
              '<span class="nowtag"><span class="pulse"></span>playing</span>' +
              '<div class="acts">' +
                (SETS.length > 1 ? '<select class="setsel" data-move="' + i + '" title="Move to another switch">' + setOpts + '</select>' : '') +
+               (groupOf(d) ? '<button class="ghost" data-gedit="' + i + '" title="Edit this group">\u270e</button>' : '') +
                '<button class="ghost" data-play="' + i + '" title="Play this now">▶</button>' +
                '<label class="sw" title="Include in the button order"><input type="checkbox" data-en="' + i + '"' +
                  (d.enabled ? ' checked' : '') + '><span class="sl"></span></label>' +
@@ -692,6 +716,9 @@ $ps_cfg = ps_cfg_read();
   function wire(wrap){
     wrap.querySelectorAll('[data-lab]').forEach(function(e){
       e.addEventListener('input', function(){ D[+e.dataset.lab].label = e.value; queueSave(); });
+    });
+    wrap.querySelectorAll('[data-gedit]').forEach(function(e){
+      e.addEventListener('click', function(){ grpOpen(D[+e.dataset.gedit].name); });
     });
     wrap.querySelectorAll('[data-move]').forEach(function(e){
       e.addEventListener('change', function(){ D[+e.dataset.move].set = +e.value; saveDesigns(); });
@@ -861,7 +888,7 @@ $ps_cfg = ps_cfg_read();
     post('lists', {}, function(r){
       if (!r.ok){ toast('Could not load plugin data', true); return; }
       SEQ = r.sequences || []; PL = r.playlists || []; PINS = r.pins || [];
-      D = r.designs || []; SETS = r.sets || []; PALETTE = r.palette || []; PATTERNS = r.patterns || []; LAYOUT = r.layout || ''; PATSECS = r.patternSeconds || 10;
+      D = r.designs || []; SETS = r.sets || []; PALETTE = r.palette || []; PATTERNS = r.patterns || []; LAYOUT = r.layout || ''; PATSECS = r.patternSeconds || 10; GROUPS = r.groups || [];
       // A throw in here used to leave the page silently half-drawn, which is a
       // miserable thing to debug from a screenshot.
       try {
@@ -903,6 +930,102 @@ $ps_cfg = ps_cfg_read();
       else toast(r.error || 'Could not create them', true);
     });
   });
+  /* ----------------------------------------------------------------- groups
+     A group is one entry in the design list that plays several designs in turn
+     and loops. It is stored as an FPP playlist, so the plugin plays it with the
+     playlist support it already had - the button steps past the whole group,
+     not through its members. */
+  var GRP_EDIT = null;   // name being edited, or null for a new group
+  var GRP_ITEMS = [];    // sequence filenames, in play order
+
+  function groupOf(d){
+    if (!d || d.type !== 'playlist') return null;
+    for (var i = 0; i < GROUPS.length; i++) if (GROUPS[i].name === d.name) return GROUPS[i];
+    return null;
+  }
+
+  function grpDraw(){
+    var box = $('ps-grp-chosen');
+    box.innerHTML = GRP_ITEMS.length ? '' : '<div class="tiny">Nothing yet - add designs below.</div>';
+    GRP_ITEMS.forEach(function(nm, i){
+      var row = document.createElement('div');
+      row.className = 'gi';
+      row.innerHTML = '<span class="idx">' + (i + 1) + '</span><span class="n">' + esc(nm) + '</span>';
+      var mk = function(txt, title, fn, dis){
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'ghost'; b.textContent = txt; b.title = title;
+        if (dis) b.disabled = true; else b.addEventListener('click', fn);
+        row.appendChild(b);
+      };
+      mk('↑', 'Move earlier', function(){ var t = GRP_ITEMS[i-1]; GRP_ITEMS[i-1] = GRP_ITEMS[i]; GRP_ITEMS[i] = t; grpDraw(); }, i === 0);
+      mk('↓', 'Move later',  function(){ var t = GRP_ITEMS[i+1]; GRP_ITEMS[i+1] = GRP_ITEMS[i]; GRP_ITEMS[i] = t; grpDraw(); }, i === GRP_ITEMS.length - 1);
+      mk('✕', 'Take out of the group', function(){ GRP_ITEMS.splice(i, 1); grpDraw(); });
+      box.appendChild(row);
+    });
+
+    var av = $('ps-grp-avail'); av.innerHTML = '';
+    SEQ.forEach(function(nm){
+      if (GRP_ITEMS.indexOf(nm) >= 0) return;          // already in, keep the list short
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'cchip'; b.textContent = nm.replace(/\.fseq$/, '');
+      b.title = nm;
+      b.addEventListener('click', function(){ GRP_ITEMS.push(nm); grpDraw(); });
+      av.appendChild(b);
+    });
+    if (!av.children.length) av.innerHTML = '<span class="tiny">Every sequence on this device is already in the group.</span>';
+
+    $('ps-grp-count').textContent = GRP_ITEMS.length ? '(' + GRP_ITEMS.length + ')' : '';
+    $('ps-grp-sum').textContent = GRP_ITEMS.length
+      ? GRP_ITEMS.length + ' design' + (GRP_ITEMS.length === 1 ? '' : 's') + ', looping'
+      : 'Add at least one design';
+    $('ps-grp-save').disabled = !GRP_ITEMS.length;
+    $('ps-grp-del').hidden = !GRP_EDIT;
+  }
+
+  function grpOpen(name){
+    $('ps-pat-panel').hidden = true;
+    GRP_EDIT = name || null;
+    GRP_ITEMS = [];
+    if (name) {
+      var g = null;
+      for (var i = 0; i < GROUPS.length; i++) if (GROUPS[i].name === name) g = GROUPS[i];
+      if (g) GRP_ITEMS = g.items.slice();
+    }
+    $('ps-grp-name').value = name || '';
+    $('ps-grp-panel').hidden = false;
+    grpDraw();
+  }
+
+  $('ps-grp-btn').addEventListener('click', function(){
+    var pan = $('ps-grp-panel');
+    if (!pan.hidden) { pan.hidden = true; return; }
+    grpOpen(null);
+  });
+  $('ps-grp-cancel').addEventListener('click', function(){ $('ps-grp-panel').hidden = true; });
+  $('ps-grp-save').addEventListener('click', function(){
+    var name = $('ps-grp-name').value.trim();
+    if (!name) { toast('Give the group a name', true); $('ps-grp-name').focus(); return; }
+    var b = $('ps-grp-save'), was = b.textContent;
+    b.disabled = true; b.textContent = 'Saving…';
+    post('group', {op: 'save', name: name, items: JSON.stringify(GRP_ITEMS), set: curSet}, function(r){
+      b.disabled = false; b.textContent = was;
+      if (!r.ok) { toast(r.error || 'Could not save the group', true); return; }
+      $('ps-grp-panel').hidden = true;
+      toast((r.added ? 'Added group "' : 'Updated group "') + r.name + '" · ' + r.count + ' designs');
+      load();
+    });
+  });
+  $('ps-grp-del').addEventListener('click', function(){
+    if (!GRP_EDIT) return;
+    if (!confirm('Delete the group "' + GRP_EDIT + '"?\n\nThe designs inside it are not deleted - only the group.')) return;
+    post('group', {op: 'delete', name: GRP_EDIT}, function(r){
+      if (!r.ok) { toast(r.error || 'Could not delete the group', true); return; }
+      $('ps-grp-panel').hidden = true;
+      toast('Deleted group "' + r.name + '"');
+      load();
+    });
+  });
+
   /* --------------------------------------------------- pattern colour chooser
      Patterns can be rendered in chosen palette colours instead of the colours
      each effect was designed with. Nothing is picked by default, which keeps the

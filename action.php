@@ -13,6 +13,7 @@
 require_once(dirname(__FILE__) . '/lib/common.php');
 require_once(dirname(__FILE__) . '/lib/solidcolors.php');
 require_once(dirname(__FILE__) . '/lib/patterns.php');
+require_once(dirname(__FILE__) . '/lib/groups.php');
 
 function ps_out($ok, $extra = array()) {
     echo json_encode(array_merge(array('ok' => $ok), $extra));
@@ -29,6 +30,7 @@ if ($action === 'lists') {
         'sets'      => ps_sets_read(),
         'palette'   => ps_palette(),
         'patterns'  => ps_pattern_list(),
+        'groups'    => ps_group_list(),
         'patternSeconds' => (int)round(PS_PAT_FRAMES * PS_PAT_STEP_MS / 1000),
         'layout'    => ps_layout_summary(),
         'config'    => ps_cfg_read(),
@@ -82,6 +84,63 @@ if ($action === 'save') {
 
     if (!ps_cfg_write($cfg)) ps_out(false, array('error' => 'Could not write the settings file'));
     ps_out(true, array('config' => $cfg));
+}
+
+if ($action === 'group') {
+    // A group is one entry in the design list that plays several sequences in
+    // turn and loops. It is stored as an FPP playlist (see lib/groups.php), so
+    // the plugin plays it with the playlist support it already had.
+    $op = isset($_POST['op']) && $_POST['op'] === 'delete' ? 'delete' : 'save';
+    $name = isset($_POST['name']) ? $_POST['name'] : '';
+
+    if ($op === 'delete') {
+        $r = ps_group_delete($name);
+        if ($r !== true) ps_out(false, array('error' => $r));
+        // and drop it from the design list, so the button stops offering it
+        $clean = ps_group_clean_name($name);
+        $designs = ps_designs_read(false); $keep = array();
+        foreach ($designs as $d)
+            if (!($d['type'] === 'playlist' && $d['name'] === $clean)) $keep[] = $d;
+        if (count($keep) !== count($designs)) ps_designs_write($keep);
+        ps_out(true, array('op' => 'delete', 'name' => $clean, 'groups' => ps_group_list()));
+    }
+
+    $items = json_decode(isset($_POST['items']) ? $_POST['items'] : '', true);
+    if (!is_array($items)) ps_out(false, array('error' => 'Malformed design list for the group.'));
+
+    // Only sequences that are really here - a stale name would make the group
+    // stall on an item that cannot play.
+    $seqs = ps_available_sequences();
+    $use = array(); $missing = array();
+    foreach ($items as $it) {
+        $it = ps_clean($it);
+        if ($it === '') continue;
+        if (!in_array($it, $seqs, true)) { $missing[] = $it; continue; }
+        $use[] = $it;
+    }
+    if (count($missing))
+        ps_out(false, array('error' => 'Not on this device: ' . implode(', ', $missing)));
+
+    $r = ps_group_write($name, $use);
+    if ($r !== true) ps_out(false, array('error' => $r));
+    $clean = ps_group_clean_name($name);
+
+    // Put it in the design list next to the individual designs, in the set the
+    // user was looking at. Editing an existing group leaves its position alone.
+    $maxSet  = max(0, count(ps_sets_read()) - 1);
+    $set     = isset($_POST['set']) ? max(0, min($maxSet, (int)$_POST['set'])) : 0;
+    $designs = ps_designs_read(false);
+    $found   = false;
+    foreach ($designs as $i => $d)
+        if ($d['type'] === 'playlist' && $d['name'] === $clean) { $found = true; $designs[$i]['label'] = $clean; }
+    if (!$found)
+        $designs[] = array('type' => 'playlist', 'name' => $clean, 'label' => $clean,
+                           'enabled' => true, 'set' => $set);
+    if (count($designs) > 200) ps_out(false, array('error' => 'Too many designs (200 max)'));
+    if (!ps_designs_write($designs)) ps_out(false, array('error' => 'Could not save the design list.'));
+
+    ps_out(true, array('op' => 'save', 'name' => $clean, 'count' => count($use),
+                       'added' => !$found, 'groups' => ps_group_list()));
 }
 
 if ($action === 'patterns') {
