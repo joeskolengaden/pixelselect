@@ -18,6 +18,17 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN="$(dirname "$HERE")"
 FPPSRC="${FPPSRC:-/opt/fpp}"
 SRC="$FPPSRC/src"
+
+# The PHP-side checks (palette, solid-colour .fseq sizing and contents) need
+# neither an FPP checkout nor a device, so run them first and always.
+if command -v php >/dev/null 2>&1; then
+    echo "=== PHP checks: solid colours ==="
+    php "$HERE/solidcolours.php" || exit 1
+    echo
+else
+    echo "(php not found - skipping the solid-colour checks)"
+fi
+
 [ -f "$SRC/Plugin.h" ] || { echo "No FPP source at $SRC - set FPPSRC=/path/to/fpp"; exit 2; }
 
 WORK="$(mktemp -d)"

@@ -22,8 +22,16 @@
  * fpp/src/fseq/FSEQFile.cpp (V2FSEQFile header parse).
  */
 
-// Covers 174,762 RGB pixels. Well past any BBB/Pi build, and only ~512 KB per
-// frame before compression.
+// Sized for the full WinterLights 48-port build at 1500 pixels per port:
+//   48 ports x 1500 px x 3 ch = 216,000 channels needed
+// 524,286 is 2.4x that (174,762 px, ~3,640 px/port across 48), so a cape can
+// be filled well past 1500/port before a colour stops reaching the last pixel.
+// Over-sizing is free: FPP ignores channels it has no output for, every frame
+// is identical so zlib takes the whole 10 s file to ~21 KB, and one
+// compression block per frame keeps the decode buffer at 512 KB on a BBB.
+// Under-sizing silently leaves the far end of a run dark - so err large.
+// tests/solidcolours.php asserts the 48 x 1500 coverage; do not shrink this
+// without reading it.
 define('PS_SOLID_CHANNELS', 524286);        // a multiple of 3
 define('PS_SOLID_STEP_MS',  250);           // byte-wide field in FSEQ, max 255
 define('PS_SOLID_FRAMES',   40);            // 40 x 250ms = exactly 10 seconds

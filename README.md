@@ -147,7 +147,21 @@ rather than guessing how many channels a given show has — FPP has no single AP
 that reports it, and guessing low would leave pixels dark — each file simply
 covers 524,286 channels (174,762 RGB pixels). Channels past the end of a show are
 ignored by FPP; channels short of it are not, so erring large is the safe
-direction, and compression means the extra costs nothing. One frame per
+direction, and compression means the extra costs nothing.
+
+That number is chosen for the **full 48-port build at 1500 pixels per port**:
+
+| | |
+| --- | --- |
+| 48 ports x 1500 px x 3 channels | **216,000 channels needed** |
+| Each colour file covers | **524,286 channels** — 2.4x the requirement |
+| Which is | 174,762 px, about **3,640 px per port** across 48 ports |
+| Cost of the whole 24-colour set | **509 KB** (~21 KB per colour) |
+
+So a fully loaded 48-port cape lights to its last pixel with room to spare, and
+there is nothing to configure per controller. `tests/solidcolours.php` asserts
+it by generating a colour and checking all 72,000 pixels across all 48 ports,
+so the sizing cannot be shrunk by accident. One frame per
 compression block keeps the decode buffer to a single frame, so a BeagleBone
 never sees more than half a megabyte at a time.
 
