@@ -186,6 +186,18 @@ $ps_cfg = ps_cfg_read();
 #ps code{background:var(--line2);padding:1px 5px;border-radius:5px;font-size:12.5px}
 #ps ol,#ps ul{padding-left:20px;margin:8px 0}
 #ps li{margin:4px 0}
+
+/* colour / effect chooser for the pattern generator */
+#ps .patpanel{margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--bg2)}
+#ps .patpanel .pp-hd{font-weight:600;font-size:12px;letter-spacing:.02em;opacity:.75;margin:2px 0 7px}
+#ps .patpanel .pp-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+#ps .patpanel .pp-note{margin:0 0 12px}
+#ps .patpanel .pp-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px}
+#ps .cchip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;
+  border:1px solid var(--line);background:var(--bg);color:inherit;font:inherit;font-size:12px;cursor:pointer}
+#ps .cchip:hover{border-color:var(--accent)}
+#ps .cchip.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);font-weight:600}
+#ps .cchip .cb{width:12px;height:12px;border-radius:50%;border:1px solid rgba(0,0,0,.25);flex:none}
 </style>
 
 <div id="ps">
@@ -281,6 +293,18 @@ $ps_cfg = ps_cfg_read();
         <button id="ps-add-btn">Add design</button>
         <button class="sec" id="ps-solid-btn" title="Create one looping .fseq per colour in media/sequences">+ Solid colours</button>
         <button class="sec" id="ps-pat-btn" title="Create WLED-style animated patterns, rendered for your pixel layout">+ WLED patterns</button>
+        <div class="patpanel" id="ps-pat-panel" hidden>
+          <div class="pp-hd">Colour</div>
+          <div class="pp-row" id="ps-pat-cols"></div>
+          <div class="pp-note tiny" id="ps-pat-colnote"></div>
+          <div class="pp-hd">Effects</div>
+          <div class="pp-row" id="ps-pat-fx"></div>
+          <div class="pp-actions">
+            <button id="ps-pat-go">Render</button>
+            <button class="sec" id="ps-pat-cancel">Cancel</button>
+            <span class="tiny" id="ps-pat-sum"></span>
+          </div>
+        </div>
       </div>
       <div class="tiny" style="margin-top:10px">Drag to reorder — the button walks this list top to bottom.
       Click a name to rename it.</div>
@@ -878,16 +902,99 @@ $ps_cfg = ps_cfg_read();
       else toast(r.error || 'Could not create them', true);
     });
   });
+  /* --------------------------------------------------- pattern colour chooser
+     Patterns can be rendered in chosen palette colours instead of the colours
+     each effect was designed with. Nothing is picked by default, which keeps the
+     built-in look for anyone who just wants the ten originals. */
+  var PAT_COLS = [];     // palette ids, in the order picked. [] = built-in look
+  var PAT_FX   = null;   // effect ids, or null for "all of them"
+
+  function patLabels(){
+    return PAT_COLS.map(function(id){
+      var hit = (PALETTE || []).filter(function(c){ return c.id === id; })[0];
+      return hit ? hit.label : id;
+    });
+  }
+
+  function patDraw(){
+    var cw = $('ps-pat-cols'); cw.innerHTML = '';
+    var orig = document.createElement('button');
+    orig.type = 'button';
+    orig.className = 'cchip' + (PAT_COLS.length ? '' : ' on');
+    orig.innerHTML = '<span class="cb" style="background:linear-gradient(90deg,#f00,#ff0,#0f0,#0cf,#60f)"></span>Built-in';
+    orig.title = 'Each effect keeps the colours it was designed with';
+    orig.addEventListener('click', function(){ PAT_COLS = []; patDraw(); });
+    cw.appendChild(orig);
+
+    (PALETTE || []).forEach(function(c){
+      var e = document.createElement('button');
+      e.type = 'button';
+      e.className = 'cchip' + (PAT_COLS.indexOf(c.id) >= 0 ? ' on' : '');
+      e.innerHTML = '<span class="cb" style="background:' + cssRgb(c.rgb) + '"></span>' + c.label;
+      e.addEventListener('click', function(){
+        var i = PAT_COLS.indexOf(c.id);
+        if (i >= 0) PAT_COLS.splice(i, 1);
+        else {
+          if (PAT_COLS.length >= 4) { toast('Four colours is as many as still reads on a moving chase', true); return; }
+          PAT_COLS.push(c.id);
+        }
+        patDraw();
+      });
+      cw.appendChild(e);
+    });
+
+    $('ps-pat-colnote').textContent = !PAT_COLS.length
+      ? 'Each effect keeps the colours it was designed with.'
+      : (PAT_COLS.length === 1
+          ? 'This colour only. The two rainbows become a brightness ramp of it rather than a flat wash.'
+          : 'The effects gradient or cycle through these, in the order you picked them.');
+
+    var fw = $('ps-pat-fx'); fw.innerHTML = '';
+    (PATTERNS || []).forEach(function(p){
+      var on = !PAT_FX || PAT_FX.indexOf(p.id) >= 0;
+      var e = document.createElement('button');
+      e.type = 'button';
+      e.className = 'cchip' + (on ? ' on' : '');
+      e.textContent = p.label;
+      e.addEventListener('click', function(){
+        if (!PAT_FX) PAT_FX = (PATTERNS || []).map(function(x){ return x.id; });
+        var i = PAT_FX.indexOf(p.id);
+        if (i >= 0) PAT_FX.splice(i, 1); else PAT_FX.push(p.id);
+        patDraw();
+      });
+      fw.appendChild(e);
+    });
+
+    var n = PAT_FX ? PAT_FX.length : (PATTERNS || []).length;
+    var lbl = patLabels().join('+');
+    $('ps-pat-sum').textContent = n
+      ? (n + ' file' + (n === 1 ? '' : 's') + (lbl ? ' in ' + lbl : ' in their built-in colours')
+         + ' · 10 s each · rendered for ' + LAYOUT)
+      : 'Pick at least one effect';
+    $('ps-pat-go').disabled = !n;
+  }
+
   $('ps-pat-btn').addEventListener('click', function(){
-    var names = (PATTERNS || []).map(function(p){ return p.label; }).join(', ');
-    if (!confirm('Create ' + (PATTERNS || []).length + ' animated patterns?\n\n' + names +
-                 '\n\nEach is a 10 second loop rendered for your pixel layout (' + LAYOUT + ').\n' +
-                 'Regenerate them if you change your outputs.')) return;
-    var b = $('ps-pat-btn'); b.disabled = true; b.textContent = 'Rendering…';
-    post('patterns', {op: 'add'}, function(r){
-      b.disabled = false; b.textContent = '+ WLED patterns';
-      if (r.ok) { toast('Added ' + r.done.length + ' patterns'); load(); }
-      else toast(r.error || 'Could not create them', true);
+    var pan = $('ps-pat-panel');
+    if (!pan.hidden) { pan.hidden = true; return; }
+    pan.hidden = false;
+    patDraw();
+  });
+  $('ps-pat-cancel').addEventListener('click', function(){ $('ps-pat-panel').hidden = true; });
+  $('ps-pat-go').addEventListener('click', function(){
+    var b = $('ps-pat-go'), was = b.textContent;
+    b.disabled = true; b.textContent = 'Rendering…';
+    var body = {op: 'add'};
+    if (PAT_COLS.length) body.colours = PAT_COLS.join(',');
+    if (PAT_FX)          body.ids     = PAT_FX.join(',');
+    post('patterns', body, function(r){
+      b.disabled = false; b.textContent = was;
+      if (r.ok) {
+        $('ps-pat-panel').hidden = true;
+        toast('Added ' + r.done.length + ' pattern' + (r.done.length === 1 ? '' : 's')
+              + (r.colourLabel ? ' in ' + r.colourLabel : ''));
+        load();
+      } else toast(r.error || 'Could not create them', true);
     });
   });
   $('ps-wire-low').addEventListener('change', applyWiring);

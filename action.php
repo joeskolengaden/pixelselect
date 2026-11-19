@@ -86,6 +86,13 @@ if ($action === 'save') {
 if ($action === 'patterns') {
     // Animated patterns, unlike solid colours, are rendered against the real
     // pixel layout - so they must be regenerated if the outputs are reconfigured.
+    //
+    // Optional POST fields:
+    //   ids=comet,scan      which effects (default: all of them)
+    //   colours=red,green   render them in these palette colours ONLY
+    //                       (absent = each effect's built-in look, as before)
+    // Colour variants are separate files - "Pattern - Comet (Red).fseq" - so a
+    // customer can be given the same chase in several colours to pick between.
     $op = isset($_POST['op']) && $_POST['op'] === 'remove' ? 'remove' : 'add';
     $d = ps_dirs();
     if (!is_dir($d['sequences']))
@@ -100,25 +107,65 @@ if ($action === 'patterns') {
     }
     $gamma = ps_output_gamma_is_unity() ? PS_PAT_GAMMA : null;
 
-    $done = array(); $failed = array();
-    foreach (ps_pattern_list() as $p) {
-        $path = $d['sequences'] . '/' . ps_pattern_filename($p['label']);
-        if ($op === 'remove') {
-            if (!file_exists($path) || @unlink($path)) $done[] = $p['label'];
-            else $failed[] = $p['label'];
-        } else {
-            if (ps_write_pattern_fseq($path, $p['id'], $L, $gamma)) $done[] = $p['label'];
-            else $failed[] = $p['label'];
-        }
+    // Which effects?
+    $wanted = array();
+    if (isset($_POST['ids']) && trim($_POST['ids']) !== '') {
+        foreach (explode(',', $_POST['ids']) as $i) { $i = trim($i); if ($i !== '') $wanted[$i] = true; }
     }
+    $effects = array();
+    foreach (ps_pattern_list() as $p)
+        if (!count($wanted) || isset($wanted[$p['id']])) $effects[] = $p;
+    if (!count($effects)) ps_out(false, array('error' => 'None of those effects exist.'));
+
+    // Which colours? Empty means "leave the effect looking the way it was built".
+    $cols = array(); $labels = array();
+    if (isset($_POST['colours']) && trim($_POST['colours']) !== '') {
+        $byId = array();
+        foreach (ps_palette() as $c) $byId[$c['id']] = $c;
+        foreach (explode(',', $_POST['colours']) as $cid) {
+            $cid = trim($cid);
+            if ($cid === '') continue;
+            if (!isset($byId[$cid]))
+                ps_out(false, array('error' => 'There is no colour called "' . $cid . '" in the palette.'));
+            $cols[]   = $byId[$cid]['rgb'];
+            $labels[] = $byId[$cid]['label'];
+        }
+        if (!count($cols))
+            ps_out(false, array('error' => 'No usable colour was given.'));
+        if (count($cols) > 4)
+            ps_out(false, array('error' => 'Choose at most four colours - more than that reads as mush on a running chase.'));
+    }
+    $colourLabel = count($labels) ? implode('+', $labels) : '';
+    // The labels are our own, but a filename is a filename: never let one carry a separator.
+    if ($colourLabel !== '' && (strpbrk($colourLabel, "/\\") !== false || strpos($colourLabel, "\0") !== false))
+        ps_out(false, array('error' => 'Bad colour name.'));
+    $useCols = count($cols) ? $cols : null;
+
+    $done = array(); $failed = array();
     if ($op === 'remove') {
+        // Sweep every pattern file, colour variants included, not just the ten
+        // built-in names - otherwise "Pattern - Comet (Red).fseq" would be orphaned.
+        $files = glob($d['sequences'] . '/' . PS_PAT_PREFIX . '*.fseq');
+        if (!is_array($files)) $files = array();
+        foreach ($files as $f) {
+            if (@unlink($f)) $done[] = basename($f);
+            else             $failed[] = basename($f);
+        }
         $designs = ps_designs_read(false); $keep = array();
         foreach ($designs as $dd)
             if (!($dd['type'] === 'sequence' && ps_is_pattern($dd['name']))) $keep[] = $dd;
         if (count($keep) !== count($designs)) ps_designs_write($keep);
+    } else {
+        foreach ($effects as $p) {
+            $name = ps_pattern_filename($p['label'], $colourLabel);
+            $path = $d['sequences'] . '/' . $name;
+            if (ps_write_pattern_fseq($path, $p['id'], $L, $gamma, $useCols)) $done[] = $name;
+            else                                                             $failed[] = $name;
+        }
     }
     ps_out(count($failed) === 0, array(
         'op' => $op, 'done' => $done, 'failed' => $failed,
+        'colours' => $labels, 'colourLabel' => $colourLabel,
         'gamma' => $gamma, 'layout' => ps_layout_summary($L),
         'error' => count($failed) ? ('Could not ' . $op . ': ' . implode(', ', $failed)) : null,
     ));

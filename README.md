@@ -182,6 +182,29 @@ effects: Rainbow, Rainbow Cycle, Breathe, Colour Wipe, Theater Chase, Running
 Lights, Comet, Larson Scanner, Twinkle and Fire Flicker. Ten seconds each at
 20 fps.
 
+### Choosing the colours
+
+By default each effect keeps the colours it was designed with. Press **+ WLED
+patterns** and a chooser opens: pick one or more colours from the same palette
+the solid colours use, pick which effects you want, and press **Render**.
+
+- **One colour** renders the effect in that colour *only* — nothing else ever
+  appears in the file. The two rainbows, which have no colour of their own,
+  become a brightness ramp of your colour instead of a flat wash, which is what
+  makes a single-colour "Rainbow Cycle" still read as a moving gradient.
+- **Several colours** (up to four) make the effect gradient or cycle through
+  them, in the order you picked.
+- **Built-in** leaves every effect exactly as it was.
+
+Each combination is its own file — `Pattern - Comet (Red).fseq`,
+`Pattern - Comet (Red+Green).fseq` — so you can hand a customer the same chase
+in several colours and let the pushbutton walk between them. Removing patterns
+removes every colour variant too.
+
+`tests/patterns.php` audits this the only way that really proves it: it renders
+every effect in red, then in blue, then in green, and fails if a single pixel in
+a single frame carries any other channel.
+
 Unlike a solid colour, **a pattern has to know where your pixels are** — "chase
 down the string" is meaningless without a layout. So these are rendered against
 your actual output configuration: every virtual string on every port, including
